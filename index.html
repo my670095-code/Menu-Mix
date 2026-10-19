@@ -35,7 +35,7 @@ body{margin:0;background:var(--bg);font-family:Inter,Segoe UI,Arial,sans-serif;c
 
 /* UPLOAD STYLES */
 .upload-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-bottom:16px}
-.upload-card,.panel,.table-panel,.kpi,.filters{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);min-width:0}
+.upload-card,.panel,.table-panel,.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);min-width:0}
 .upload-card{padding:15px}
 .upload-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .upload-icon{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:#edf3ff;color:var(--blue);font-size:18px}
@@ -60,7 +60,7 @@ body{margin:0;background:var(--bg);font-family:Inter,Segoe UI,Arial,sans-serif;c
 .metric-toggle button:not(.active):hover{background:#f0f4f9;color:var(--ink)}
 
 /* FILTER & CUSTOM DROPDOWN STYLES */
-.filters{display:flex;flex-wrap:wrap;gap:9px;padding:12px;margin-bottom:16px;position:relative;z-index:10}
+.filters{display:flex;flex-wrap:wrap;gap:9px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:16px;position:relative;z-index:10}
 .filter{min-width:130px;flex:1;position:relative}
 .filter label{display:block;font-size:9px;color:#78879a;font-weight:800;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
 .filter input[type="date"],.filter input[type="text"],.filter select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;background:white;color:var(--ink);font-size:11px;height:35px}
@@ -239,22 +239,25 @@ tbody tr:hover{background:#f8fbff}
 
 <!-- DASHBOARD VIEW -->
 <section id="dashboard" class="hidden">
-<div class="filters">
-  <div class="filter"><label>Area Manager</label><div class="ms-container" id="ms-fAM"></div></div>
-  <div class="filter"><label>Store</label><div class="ms-container" id="ms-fStore"></div></div>
-  <div class="filter"><label>Category</label><div class="ms-container" id="ms-fCategory"></div></div>
-  <div class="filter"><label>Sub Category</label><div class="ms-container" id="ms-fSub"></div></div>
-  <div class="filter"><label>Size</label><div class="ms-container" id="ms-fSize"></div></div>
-  <div class="filter"><label>Product / Long Name</label><div class="ms-container" id="ms-fProduct"></div></div>
-  <div class="filter"><label>Start date</label><input id="fStart" type="date"></div>
-  <div class="filter"><label>End date</label><input id="fEnd" type="date"></div>
-</div>
-<div class="toolbar">
-  <button class="btn secondary" id="exportBtn" disabled>Export filtered data (CSV)</button>
-  <!-- TOGGLE BUTTON -->
-  <div class="metric-toggle">
-    <button type="button" id="btnMetricSales" class="active" onclick="switchMetric('sales')">Sales</button>
-    <button type="button" id="btnMetricQty" onclick="switchMetric('qty')">Qty</button>
+
+<!-- GLOBAL FILTERS (Main Dashboard) -->
+<div id="globalFiltersBar">
+  <div class="filters">
+    <div class="filter"><label>Area Manager</label><div class="ms-container" id="ms-fAM"></div></div>
+    <div class="filter"><label>Store</label><div class="ms-container" id="ms-fStore"></div></div>
+    <div class="filter"><label>Category</label><div class="ms-container" id="ms-fCategory"></div></div>
+    <div class="filter"><label>Sub Category</label><div class="ms-container" id="ms-fSub"></div></div>
+    <div class="filter"><label>Size</label><div class="ms-container" id="ms-fSize"></div></div>
+    <div class="filter"><label>Product / Long Name</label><div class="ms-container" id="ms-fProduct"></div></div>
+    <div class="filter"><label>Start date</label><input id="fStart" type="date"></div>
+    <div class="filter"><label>End date</label><input id="fEnd" type="date"></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn secondary" id="exportBtn" disabled>Export filtered data (CSV)</button>
+    <div class="metric-toggle">
+      <button type="button" id="btnMetricSales" class="active" onclick="switchMetric('sales')">Sales</button>
+      <button type="button" id="btnMetricQty" onclick="switchMetric('qty')">Qty</button>
+    </div>
   </div>
 </div>
 
@@ -318,8 +321,101 @@ tbody tr:hover{background:#f8fbff}
 <section class="view" id="view-products"><div class="panel"><div class="panel-head"><h3>Product Performance</h3><span>Ranked by sales</span></div><div class="chartbox"><canvas id="productChart"></canvas></div></div><div class="table-panel"><div class="panel-head"><h3>Product performance detail</h3><span id="productCount"></span></div><div class="table-wrap"><table><thead><tr><th>Rank</th><th>Item Code</th><th>Product</th><th>Size</th><th>Category</th><th class="num">Qty</th><th class="num">Sales</th><th class="num">Sales %</th></tr></thead><tbody id="productRows"></tbody></table></div></div></section>
 <section class="view" id="view-stores"><div class="panel"><div class="panel-head"><h3>Store Performance</h3><span>Ranked by sales</span></div><div class="chartbox"><canvas id="storeChart"></canvas></div></div><div class="table-panel"><div class="panel-head"><h3>Store performance detail</h3><span id="storeCount"></span></div><div class="table-wrap"><table><thead><tr><th>Rank</th><th>Store ID</th><th>Store</th><th>Area Manager</th><th class="num">Qty</th><th class="num">Sales</th><th class="num">Sales %</th></tr></thead><tbody id="storeRows"></tbody></table></div></div></section>
 <section class="view" id="view-menumix"><div class="charts"><div class="panel"><div class="panel-head"><h3>Category sales mix</h3><span>Amount</span></div><div class="chartbox"><canvas id="mixCategoryChart"></canvas></div></div><div class="panel"><div class="panel-head"><h3>Sub-category sales mix</h3><span>Amount</span></div><div class="chartbox"><canvas id="subChart"></canvas></div></div></div><div class="table-panel"><div class="panel-head"><h3>Menu mix detail</h3><span>Product contribution</span></div><div class="table-wrap"><table><thead><tr><th>Item Code</th><th>Product</th><th>Category</th><th>Sub Category</th><th>Size</th><th class="num">Qty</th><th class="num">Qty %</th><th class="num">Sales</th><th class="num">Sales %</th></tr></thead><tbody id="mixRows"></tbody></table></div></div></section>
-<section class="view" id="view-sizes"><div class="kpis"><div class="kpi"><div class="label">Size categories</div><div class="value" id="sizeCount">—</div><div class="hint">Distinct mapped sizes</div></div><div class="kpi"><div class="label">Top size by units</div><div class="value" id="topSize">—</div><div class="hint">Highest quantity share</div></div><div class="kpi"><div class="label">Top size quantity %</div><div class="value" id="topSizePct">—</div><div class="hint">Of all selected units</div></div><div class="kpi"><div class="label">Unmapped size units</div><div class="value" id="unknownSize">—</div><div class="hint">Size missing in category mapping</div></div></div><div class="charts"><div class="panel"><div class="panel-head"><h3>Size mix % by quantity</h3><span>Share of units</span></div><div class="chartbox"><canvas id="sizeQtyChart"></canvas></div></div><div class="panel"><div class="panel-head"><h3>Size mix % by sales</h3><span>Share of sales</span></div><div class="chartbox"><canvas id="sizeSalesChart"></canvas></div></div></div><div class="table-panel"><div class="panel-head"><h3>Size contribution table</h3><span>Separate size view</span></div><div class="table-wrap"><table><thead><tr><th>Size</th><th class="num">Qty</th><th class="num">Qty %</th><th class="num">Sales</th><th class="num">Sales %</th><th class="num">Product count</th></tr></thead><tbody id="sizeRows"></tbody></table></div></div></section>
-<section class="view" id="view-compare"><div class="table-panel"><h3 class="section-title">Comparison View</h3><p class="note">Compare two time periods using the same current Area Manager, Store, Category and product filters. Percent change is calculated as (Period B − Period A) ÷ Period A.</p><div class="compare-controls"><div class="control"><label>Compare by</label><select id="compareBy"><option value="__category">Category</option><option value="__sub">Sub Category</option><option value="__size">Size</option><option value="__manager">Area Manager</option><option value="__store">Store</option><option value="__product">Product</option></select></div><div class="control"><label>Period A start</label><input id="aStart" type="date"></div><div class="control"><label>Period A end</label><input id="aEnd" type="date"></div><div class="control"><label>Period B start</label><input id="bStart" type="date"></div><div class="control"><label>Period B end</label><input id="bEnd" type="date"></div><div class="control" style="align-self:end"><button class="btn primary" id="compareBtn">Run Comparison</button></div></div><div class="kpis"><div class="kpi"><div class="label">Period A Sales</div><div class="value" id="aSales">—</div></div><div class="kpi"><div class="label">Period B Sales</div><div class="value" id="bSales">—</div></div><div class="kpi"><div class="label">Sales Change</div><div class="value" id="salesChange">—</div></div><div class="kpi"><div class="label">Quantity Change</div><div class="value" id="qtyChange">—</div></div></div><div class="panel"><div class="panel-head"><h3>Period A vs Period B sales</h3><span>By selected dimension</span></div><div class="chartbox"><canvas id="compareChart"></canvas></div></div><div class="table-panel"><div class="panel-head"><h3>Comparison detail</h3><span>Sales and quantity change</span></div><div class="table-wrap"><table><thead><tr><th>Dimension</th><th class="num">A Qty</th><th class="num">B Qty</th><th class="num">Qty Change %</th><th class="num">A Sales</th><th class="num">B Sales</th><th class="num">Sales Change %</th></tr></thead><tbody id="compareRows"></tbody></table></div></div></section>
+
+<!-- SIZE MIX VIEW (Local Filters) -->
+<section class="view" id="view-sizes">
+  
+  <!-- Size-specific Filters -->
+  <div class="filters">
+    <div class="filter"><label>Area Manager</label><div class="ms-container" id="ms-sfAM"></div></div>
+    <div class="filter"><label>Store</label><div class="ms-container" id="ms-sfStore"></div></div>
+    <div class="filter"><label>Start date</label><input id="sfStart" type="date"></div>
+    <div class="filter"><label>End date</label><input id="sfEnd" type="date"></div>
+  </div>
+
+  <!-- Size KPIs -->
+  <div class="kpis">
+    <div class="kpi"><div class="label">Active Sizes</div><div class="value" id="sizeCount">—</div><div class="hint">Distinct mapped sizes</div></div>
+    <div class="kpi"><div class="label">Top size by units</div><div class="value" id="topSize">—</div><div class="hint">Highest quantity share</div></div>
+    <div class="kpi"><div class="label">Top size quantity %</div><div class="value" id="topSizePct">—</div><div class="hint">Of all selected units</div></div>
+    <div class="kpi"><div class="label">Unmapped size units</div><div class="value" id="unknownSize">—</div><div class="hint">Size missing in category mapping</div></div>
+  </div>
+  
+  <!-- Size Toggle Buttons -->
+  <div class="toolbar" style="justify-content: center; margin-bottom: 24px;">
+    <div class="metric-toggle" style="margin-left: 0; box-shadow: var(--shadow);">
+      <button type="button" id="btnSizeHot" class="active" onclick="switchSizeGroup('hot')">Hot</button>
+      <button type="button" id="btnSizeCold" onclick="switchSizeGroup('cold')">Cold</button>
+      <button type="button" id="btnSizeJoeBox" onclick="switchSizeGroup('joebox')">Joe Box</button>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="panel"><div class="panel-head"><h3>Size mix % by quantity</h3><span>Share of units</span></div><div class="chartbox"><canvas id="sizeQtyChart"></canvas></div></div>
+    <div class="panel"><div class="panel-head"><h3>Size mix % by sales</h3><span>Share of sales</span></div><div class="chartbox"><canvas id="sizeSalesChart"></canvas></div></div>
+  </div>
+  
+  <div class="table-panel" style="margin-bottom: 16px;">
+    <div class="panel-head"><h3>Size contribution table</h3><span>Filtered by Size Group</span></div>
+    <div class="table-wrap">
+      <table><thead><tr><th>Size</th><th class="num">Qty</th><th class="num">Qty %</th><th class="num">Sales</th><th class="num">Sales %</th><th class="num">Product count</th></tr></thead><tbody id="sizeRows"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Store wise breakdown -->
+  <div class="table-panel">
+    <div class="panel-head"><h3>Store-wise Size Breakdown</h3><span>% of each store's total qty</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead id="storeSizeThead">
+          <tr id="storeSizeHeaderRow">
+            <th>Store</th>
+            <th class="num">Total Qty</th>
+            <th class="num">Total Sales</th>
+            <!-- Dynamic columns for sizes will be inserted here via JS -->
+          </tr>
+        </thead>
+        <tbody id="storeSizeRows"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON VIEW (Local Filters) -->
+<section class="view" id="view-compare">
+  <div class="table-panel">
+    <h3 class="section-title">Comparison View</h3>
+    <p class="note">Compare two time periods. Percent change is calculated as (Period B − Period A) ÷ Period A.</p>
+    
+    <div class="compare-controls">
+      <div class="control"><label>Compare by</label><select id="compareBy"><option value="__category">Category</option><option value="__sub">Sub Category</option><option value="__size">Size</option><option value="__manager">Area Manager</option><option value="__store">Store</option><option value="__product">Product</option></select></div>
+      <div class="control"><label>Period A start</label><input id="aStart" type="date"></div>
+      <div class="control"><label>Period A end</label><input id="aEnd" type="date"></div>
+      <div class="control"><label>Period B start</label><input id="bStart" type="date"></div>
+      <div class="control"><label>Period B end</label><input id="bEnd" type="date"></div>
+      <div class="control" style="align-self:end"><button class="btn primary" id="compareBtn">Run Comparison</button></div>
+    </div>
+    
+    <div class="kpis">
+      <div class="kpi"><div class="label">Period A Sales</div><div class="value" id="aSales">—</div></div>
+      <div class="kpi"><div class="label">Period B Sales</div><div class="value" id="bSales">—</div></div>
+      <div class="kpi"><div class="label">Sales Change</div><div class="value" id="salesChange">—</div></div>
+      <div class="kpi"><div class="label">Quantity Change</div><div class="value" id="qtyChange">—</div></div>
+    </div>
+    
+    <div class="panel">
+      <div class="panel-head"><h3>Period A vs Period B sales</h3><span>By selected dimension</span></div>
+      <div class="chartbox"><canvas id="compareChart"></canvas></div>
+    </div>
+    
+    <div class="table-panel" style="margin-top:16px;">
+      <div class="panel-head"><h3>Comparison detail</h3><span>Sales and quantity change</span></div>
+      <div class="table-wrap"><table><thead><tr><th>Dimension</th><th class="num">A Qty</th><th class="num">B Qty</th><th class="num">Qty Change %</th><th class="num">A Sales</th><th class="num">B Sales</th><th class="num">Sales Change %</th></tr></thead><tbody id="compareRows"></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- DATA SOURCES (No top filters) -->
 <section class="view" id="view-mapping">
   <div class="table-panel">
     <div class="panel-head"><h3>Category Mapping Diagnostics</h3><span id="mappingCount"></span></div>
@@ -335,11 +431,13 @@ tbody tr:hover{background:#f8fbff}
 </section><div class="footer">ViewX • Menu Mix Intelligence • Data is processed locally in this browser; Excel libraries load from public CDNs.</div></main></div>
 <script>
 'use strict';
-const $=id=>document.getElementById(id);let rawRows=[],filteredRows=[],charts={},files={menu:null,category:null,allocation:null},categoryRows=[],allocationRows=[];
-// Sorting state tracker
+const $=id=>document.getElementById(id);let rawRows=[],charts={},files={menu:null,category:null,allocation:null},categoryRows=[],allocationRows=[];
+// Filter state trackers
+let globalFilters = { am: [], store: [], cat: [], sub: [], size: [], prod: [], start: '', end: '' };
+let sizeFilters = { am: [], store: [], start: '', end: '' };
 let currentSort = { table: null, dir: 1 };
-// Metric state tracker
 let currentMetric = 'sales';
+let currentSizeGroup = 'hot';
 
 const fmt=n=>Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0}),money=n=>fmt(n),pct=n=>`${Number(n||0).toFixed(1)}%`,norm=v=>String(v??'').replace(/^\uFEFF/,'').trim().toLowerCase().replace(/[\s_\-./()\\]+/g,'');
 function val(r,...keys){const wanted=keys.map(norm);for(const k of Object.keys(r||{})){if(wanted.includes(norm(k))&&r[k]!==undefined&&r[k]!==null&&String(r[k]).trim()!=='')return r[k]}return ''}
@@ -359,7 +457,6 @@ function setMessage(t,warning=false){$('message').textContent=t;$('message').cla
 $('menuToggle').addEventListener('click', () => {
   const sidebar = $('sidebar');
   sidebar.classList.toggle('hidden');
-  // Optional: tell Chart.js to resize if we hide the sidebar to prevent squished charts
   setTimeout(() => {
     Object.values(charts).forEach(c => c.resize());
   }, 300);
@@ -451,7 +548,7 @@ $('buildBtn').addEventListener('click',async()=>{
 });
 
 /* =========================================
-   METRIC TOGGLE LOGIC
+   METRIC & SIZE TOGGLE LOGIC
    ========================================= */
 function switchMetric(metric) {
   currentMetric = metric;
@@ -465,10 +562,24 @@ function switchMetric(metric) {
   renderDashboard();
 }
 
+function switchSizeGroup(group) {
+  currentSizeGroup = group;
+  ['Hot','Cold','JoeBox'].forEach(g => {
+    const btn = $('btnSize' + g);
+    if (btn) btn.classList.remove('active');
+  });
+  
+  if (group === 'hot') $('btnSizeHot').classList.add('active');
+  if (group === 'cold') $('btnSizeCold').classList.add('active');
+  if (group === 'joebox') $('btnSizeJoeBox').classList.add('active');
+
+  renderDashboard();
+}
+
 /* =========================================
-   CUSTOM MULTI-SELECT DROPDOWN LOGIC
+   CASCADING FILTER & DROPDOWN LOGIC
    ========================================= */
-const msConfigs = { fAM: {}, fStore: {}, fCategory: {}, fSub: {}, fSize: {}, fProduct: {} };
+const msConfigs = { fAM: {}, fStore: {}, fCategory: {}, fSub: {}, fSize: {}, fProduct: {}, sfAM: {}, sfStore: {} };
 function initMultiSelects() {
   Object.keys(msConfigs).forEach(id => {
     const container = $('ms-' + id); if (!container) return;
@@ -514,38 +625,78 @@ function updateMultiSelectUI(id) {
   const checkboxes = list.querySelectorAll('input[type="checkbox"]'); const total = checkboxes.length; const selected = list.querySelectorAll('input[type="checkbox"]:checked').length; const textEl = $(`${id}_text`);
   if (selected === 0 || selected === total) { textEl.textContent = `All (${total})`; } else { textEl.textContent = `${selected} selected`; }
 }
+
 function populateFilters(){
-  populateMultiSelect('fAM', rawRows.map(r=>r.__manager)); populateMultiSelect('fStore', rawRows.map(r=>r.__store));
-  populateMultiSelect('fCategory', rawRows.map(r=>r.__category)); populateMultiSelect('fSub', rawRows.map(r=>r.__sub));
-  populateMultiSelect('fSize', rawRows.map(r=>r.__size)); populateMultiSelect('fProduct', rawRows.map(r=>r.__longName));
-  const dates = rawRows.map(r=>r.__date).filter(Boolean).sort(); $('fStart').value = dates[0] || ''; $('fEnd').value = dates[dates.length-1] || '';
+  // Global
+  populateMultiSelect('fAM', rawRows.map(r=>r.__manager)); 
+  populateMultiSelect('fStore', rawRows.map(r=>r.__store));
+  populateMultiSelect('fCategory', rawRows.map(r=>r.__category)); 
+  populateMultiSelect('fSub', rawRows.map(r=>r.__sub));
+  populateMultiSelect('fSize', rawRows.map(r=>r.__size)); 
+  populateMultiSelect('fProduct', rawRows.map(r=>r.__longName));
+  
+  // Size Mix Local
+  populateMultiSelect('sfAM', rawRows.map(r=>r.__manager)); 
+  populateMultiSelect('sfStore', rawRows.map(r=>r.__store));
+
+  const dates = rawRows.map(r=>r.__date).filter(Boolean).sort(); 
+  $('fStart').value = dates[0] || ''; $('fEnd').value = dates[dates.length-1] || '';
+  $('sfStart').value = dates[0] || ''; $('sfEnd').value = dates[dates.length-1] || '';
 }
+
 function onFilterChange(changedId) {
+  // --- GLOBAL CASCADING ---
   if (changedId === 'fAM') {
-    const ams = getSelectedMulti('fAM'); const allowedStores = [...new Set(rawRows.filter(r => matchMulti(ams, r.__manager)).map(r => r.__store))]; populateMultiSelect('fStore', allowedStores, true);
+    const ams = getSelectedMulti('fAM'); 
+    const allowedStores = [...new Set(rawRows.filter(r => matchMulti(ams, r.__manager)).map(r => r.__store))]; 
+    populateMultiSelect('fStore', allowedStores, true);
   }
-  if (changedId === 'fCategory') {
-    const cats = getSelectedMulti('fCategory'); const allowedSubs = [...new Set(rawRows.filter(r => matchMulti(cats, r.__category)).map(r => r.__sub))]; const allowedSizes = [...new Set(rawRows.filter(r => matchMulti(cats, r.__category)).map(r => r.__size))];
-    populateMultiSelect('fSub', allowedSubs, true); populateMultiSelect('fSize', allowedSizes, true);
+  if (changedId === 'fCategory' || changedId === 'fSub' || changedId === 'fSize') {
+    const cats = getSelectedMulti('fCategory');
+    const subs = getSelectedMulti('fSub');
+    const sizes = getSelectedMulti('fSize');
+
+    let filteredRaw = rawRows;
+    if (cats.length > 0) filteredRaw = filteredRaw.filter(r => matchMulti(cats, r.__category));
+    
+    const allowedSubs = [...new Set(filteredRaw.map(r => r.__sub))]; 
+    populateMultiSelect('fSub', allowedSubs, true);
+
+    if (subs.length > 0) filteredRaw = filteredRaw.filter(r => matchMulti(subs, r.__sub));
+    
+    const allowedSizes = [...new Set(filteredRaw.map(r => r.__size))];
+    populateMultiSelect('fSize', allowedSizes, true);
+
+    if (sizes.length > 0) filteredRaw = filteredRaw.filter(r => matchMulti(sizes, r.__size));
+
+    const allowedProducts = [...new Set(filteredRaw.map(r => r.__longName))];
+    populateMultiSelect('fProduct', allowedProducts, true);
   }
+
+  // --- SIZE LOCAL CASCADING ---
+  if (changedId === 'sfAM') {
+    const ams = getSelectedMulti('sfAM'); 
+    const allowedStores = [...new Set(rawRows.filter(r => matchMulti(ams, r.__manager)).map(r => r.__store))]; 
+    populateMultiSelect('sfStore', allowedStores, true);
+  }
+
   applyFilters();
 }
+
 function matchMulti(sel,val){ return !sel.length || sel.includes(val); }
-['fStart', 'fEnd'].forEach(id => $(id).addEventListener('change', applyFilters));
+['fStart', 'fEnd', 'sfStart', 'sfEnd'].forEach(id => $(id).addEventListener('change', applyFilters));
+
 function applyFilters(){
   if(!rawRows.length) return;
-  const ams = getSelectedMulti('fAM'); const stores = getSelectedMulti('fStore'); const cats = getSelectedMulti('fCategory'); const subs = getSelectedMulti('fSub'); const sizes = getSelectedMulti('fSize'); const prods = getSelectedMulti('fProduct');
-  const start = $('fStart').value; const end = $('fEnd').value;
-  filteredRows = rawRows.filter(r => 
-    matchMulti(ams, r.__manager) && 
-    matchMulti(stores, r.__store) && 
-    matchMulti(cats, r.__category) && 
-    matchMulti(subs, r.__sub) && 
-    matchMulti(sizes, r.__size) && 
-    matchMulti(prods, r.__longName) && 
-    (!start || !r.__date || r.__date >= start) && 
-    (!end || !r.__date || r.__date <= end)
-  );
+  
+  // Build Global
+  globalFilters.ams = getSelectedMulti('fAM'); globalFilters.stores = getSelectedMulti('fStore'); globalFilters.cats = getSelectedMulti('fCategory'); globalFilters.subs = getSelectedMulti('fSub'); globalFilters.sizes = getSelectedMulti('fSize'); globalFilters.prods = getSelectedMulti('fProduct');
+  globalFilters.start = $('fStart').value; globalFilters.end = $('fEnd').value;
+
+  // Build Size Mix
+  sizeFilters.ams = getSelectedMulti('sfAM'); sizeFilters.stores = getSelectedMulti('sfStore');
+  sizeFilters.start = $('sfStart').value; sizeFilters.end = $('sfEnd').value;
+
   renderDashboard(); renderSourceViews();
 }
 initMultiSelects();
@@ -597,10 +748,19 @@ function setChart(id,type,labels,datasets,horizontal=false){
           align: type === 'bar' ? (horizontal ? 'right' : 'top') : (type === 'line' ? 'top' : 'center'),
           offset: type === 'bar' ? 4 : (type === 'line' ? 6 : 0),
           font: { size: 10, weight: 'bold' },
-          formatter: function(value) {
-            if (value >= 1000000) return (value / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-            if (value >= 1000) return (value / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-            return value;
+          formatter: function(value, context) {
+            // If the dataset specifically asks for a percentage (e.g., size mix doughnuts)
+            if (context.dataset.suffix === '%') {
+              return Number(value).toFixed(1) + '%';
+            }
+            // Otherwise, fallback to default currency/quantity formatting
+            if (currentMetric === 'sales') {
+              if (value >= 1000000) return (value / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+              if (value >= 1000) return (value / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+              return value;
+            } else {
+              return fmt(value);
+            }
           }
         }
       },
@@ -643,7 +803,21 @@ function updateSortIcons() {
 }
 
 function renderDashboard(){
-  const a=aggregate(filteredRows);
+  // ==========================================
+  // GLOBAL OVERVIEW / PRODUCTS / STORES / MENU MIX
+  // ==========================================
+  const globalRows = rawRows.filter(r => 
+    matchMulti(globalFilters.ams, r.__manager) && 
+    matchMulti(globalFilters.stores, r.__store) && 
+    matchMulti(globalFilters.cats, r.__category) && 
+    matchMulti(globalFilters.subs, r.__sub) && 
+    matchMulti(globalFilters.sizes, r.__size) && 
+    matchMulti(globalFilters.prods, r.__longName) && 
+    (!globalFilters.start || !r.__date || r.__date >= globalFilters.start) && 
+    (!globalFilters.end || !r.__date || r.__date <= globalFilters.end)
+  );
+
+  const a=aggregate(globalRows);
   const isSales = currentMetric === 'sales';
   const metricKey = isSales ? 'sales' : 'qty';
   const metricLabel = isSales ? 'Sales' : 'Qty';
@@ -658,14 +832,13 @@ function renderDashboard(){
   $('kQty').textContent = isSales ? fmt(a.qty) : money(a.sales);
   $('kpi2Hint').textContent = isSales ? 'Sum of QTY' : 'Sum of AMOUNT';
 
-  $('kStores').textContent=fmt(new Set(filteredRows.map(r=>r.__storeId||r.__store)).size);
-  $('kProducts').textContent=fmt(new Set(filteredRows.map(r=>r.__item).filter(Boolean)).size);
+  $('kStores').textContent=fmt(new Set(globalRows.map(r=>r.__storeId||r.__store)).size);
+  $('kProducts').textContent=fmt(new Set(globalRows.map(r=>r.__item).filter(Boolean)).size);
   
-  let cats = groupBy(filteredRows,'__category');
-  let catQty = groupBy(filteredRows,'__category');
-  let managers = groupBy(filteredRows,'__manager');
-  let stores = groupBy(filteredRows,'__store');
-  const dates = groupBy(filteredRows,'__date').filter(x=>x.name!=='Unmapped').sort((x,y)=>x.name.localeCompare(y.name));
+  let cats = groupBy(globalRows,'__category');
+  let managers = groupBy(globalRows,'__manager');
+  let stores = groupBy(globalRows,'__store');
+  const dates = groupBy(globalRows,'__date').filter(x=>x.name!=='Unmapped').sort((x,y)=>x.name.localeCompare(y.name));
 
   // Default Sort logic
   if (currentSort.table === 'catAmount') { cats = sortData(cats, metricKey, currentSort.dir); }
@@ -722,31 +895,164 @@ function renderDashboard(){
   // 4. Trend
   setChart('trendChart','line',dates.map(x=>x.name),[{label:metricLabel,data:dates.map(x=>x[metricKey])}]);
 
-  // OTHER VIEWS CHARTS (Keep static for now, or optionally update them too)
-  const products = groupBy(filteredRows,'__product').sort((x,y)=>y.sales-x.sales);
+  // OTHER VIEWS CHARTS (Products, Stores, MenuMix)
+  const products = groupBy(globalRows,'__product').sort((x,y)=>y.sales-x.sales);
   setChart('productChart','bar',products.slice(0,20).map(x=>x.name),[{label:'Sales',data:products.slice(0,20).map(x=>x.sales)}],true); $('productCount').textContent=`${fmt(products.length)} products`;
-  tableRows('productRows',products.map((x,i)=>({...x,rank:i+1,code:(filteredRows.find(r=>r.__product===x.name)||{}).__item,size:(filteredRows.find(r=>r.__product===x.name)||{}).__size,category:(filteredRows.find(r=>r.__product===x.name)||{}).__category,salesPct:share(x.sales,a.sales)})),[{k:'rank'},{k:'code'},{k:'name'},{k:'size'},{k:'category'},{k:'qty',num:true},{k:'sales',num:true,v:r=>money(r.sales)},{k:'salesPct',num:true,v:r=>pct(r.salesPct)}]);
+  tableRows('productRows',products.map((x,i)=>({...x,rank:i+1,code:(globalRows.find(r=>r.__product===x.name)||{}).__item,size:(globalRows.find(r=>r.__product===x.name)||{}).__size,category:(globalRows.find(r=>r.__product===x.name)||{}).__category,salesPct:share(x.sales,a.sales)})),[{k:'rank'},{k:'code'},{k:'name'},{k:'size'},{k:'category'},{k:'qty',num:true},{k:'sales',num:true,v:r=>money(r.sales)},{k:'salesPct',num:true,v:r=>pct(r.salesPct)}]);
   
   setChart('storeChart','bar',stores.slice(0,25).map(x=>x.name),[{label:'Sales',data:stores.slice(0,25).map(x=>x.sales)}],true); $('storeCount').textContent=`${fmt(stores.length)} stores`;
-  tableRows('storeRows',stores.map((x,i)=>({...x,rank:i+1,id:(filteredRows.find(r=>r.__store===x.name)||{}).__storeId,manager:(filteredRows.find(r=>r.__store===x.name)||{}).__manager,salesPct:share(x.sales,a.sales)})),[{k:'rank'},{k:'id'},{k:'name'},{k:'manager'},{k:'qty',num:true},{k:'sales',num:true,v:r=>money(r.sales)},{k:'salesPct',num:true,v:r=>pct(r.salesPct)}]);
+  tableRows('storeRows',stores.map((x,i)=>({...x,rank:i+1,id:(globalRows.find(r=>r.__store===x.name)||{}).__storeId,manager:(globalRows.find(r=>r.__store===x.name)||{}).__manager,salesPct:share(x.sales,a.sales)})),[{k:'rank'},{k:'id'},{k:'name'},{k:'manager'},{k:'qty',num:true},{k:'sales',num:true,v:r=>money(r.sales)},{k:'salesPct',num:true,v:r=>pct(r.salesPct)}]);
   
-  const subs = groupBy(filteredRows,'__sub').sort((x,y)=>y.sales-x.sales);
+  const subs = groupBy(globalRows,'__sub').sort((x,y)=>y.sales-x.sales);
   setChart('mixCategoryChart','doughnut',cats.slice(0,12).map(x=>x.name),[{label:'Sales',data:cats.slice(0,12).map(x=>x.sales)}]);
   setChart('subChart','bar',subs.slice(0,20).map(x=>x.name),[{label:'Sales',data:subs.slice(0,20).map(x=>x.sales)}],true);
-  const itemGroups=new Map(); filteredRows.forEach(r=>{const k=r.__item+'|'+r.__product;if(!itemGroups.has(k))itemGroups.set(k,{item:r.__item,product:r.__product,category:r.__category,sub:r.__sub,size:r.__size,qty:0,sales:0});let x=itemGroups.get(k);x.qty+=r.__qty;x.sales+=r.__sales});
+  const itemGroups=new Map(); globalRows.forEach(r=>{const k=r.__item+'|'+r.__product;if(!itemGroups.has(k))itemGroups.set(k,{item:r.__item,product:r.__product,category:r.__category,sub:r.__sub,size:r.__size,qty:0,sales:0});let x=itemGroups.get(k);x.qty+=r.__qty;x.sales+=r.__sales});
   const mix=[...itemGroups.values()].sort((x,y)=>y.sales-x.sales);
   tableRows('mixRows',mix,[{k:'item'},{k:'product'},{k:'category'},{k:'sub'},{k:'size'},{k:'qty',num:true},{num:true,v:r=>pct(share(r.qty,a.qty))},{k:'sales',num:true,v:r=>money(r.sales)},{num:true,v:r=>pct(share(r.sales,a.sales))}]);
+
+  // ==========================================
+  // SIZE MIX VIEW (Using Local Filters)
+  // ==========================================
   
-  const sizeGroups=groupBy(filteredRows,'__size').sort((x,y)=>y.qty-x.qty),top=sizeGroups[0]||{name:'—',qty:0};
-  $('sizeCount').textContent=fmt(sizeGroups.filter(x=>x.name!=='Unmapped').length); $('topSize').textContent=top.name; $('topSizePct').textContent=pct(share(top.qty,a.qty)); $('unknownSize').textContent=fmt((sizeGroups.find(x=>x.name==='Unmapped')||{qty:0}).qty);
-  setChart('sizeQtyChart','doughnut',sizeGroups.map(x=>x.name),[{label:'Quantity %',data:sizeGroups.map(x=>share(x.qty,a.qty))}]);
-  setChart('sizeSalesChart','doughnut',sizeGroups.map(x=>x.name),[{label:'Sales %',data:sizeGroups.map(x=>share(x.sales,a.sales))}]);
-  tableRows('sizeRows',sizeGroups,[{k:'name'},{k:'qty',num:true},{num:true,v:r=>pct(share(r.qty,a.qty))},{k:'sales',num:true,v:r=>money(r.sales)},{num:true,v:r=>pct(share(r.sales,a.sales))},{num:true,v:r=>fmt(r.items.size)}]);
+  const sizeLocalRows = rawRows.filter(r => 
+    matchMulti(sizeFilters.ams, r.__manager) && 
+    matchMulti(sizeFilters.stores, r.__store) && 
+    (!sizeFilters.start || !r.__date || r.__date >= sizeFilters.start) && 
+    (!sizeFilters.end || !r.__date || r.__date <= sizeFilters.end)
+  );
+
+  // 1. Filter ONLY Beverages
+  const bevRows = sizeLocalRows.filter(r => {
+    const c = (r.__category || '').toLowerCase();
+    return c.includes('beverage') || c.includes('beverages');
+  });
+
+  // 2. Map Hot/Cold/JoeBox and filter by current selection
+  const excludeSizes = ['4 oz', '6 oz', '7 oz', '8 oz']; // Sizes to hide in Hot/Cold
+
+  const sizeFilteredRows = bevRows.filter(r => {
+    const size = (r.__size || '').toLowerCase();
+    const sub = (r.__sub || '').toLowerCase();
+    const prod = (r.__product || '').toLowerCase();
+    const combined = size + ' ' + sub + ' ' + prod;
+
+    // Exclude specific oz sizes for Hot and Cold
+    if (currentSizeGroup === 'hot' || currentSizeGroup === 'cold') {
+      if (excludeSizes.some(ex => size.includes(ex))) return false;
+    }
+
+    if (currentSizeGroup === 'joebox') {
+      return combined.includes('joe box') || combined.includes('joebox');
+    }
+    
+    if (currentSizeGroup === 'hot') {
+      return combined.includes('hot');
+    }
+    
+    if (currentSizeGroup === 'cold') {
+      return combined.includes('cold') || combined.includes('ice');
+    }
+
+    return true; 
+  });
+
+  const sizeAgg = aggregate(sizeFilteredRows);
+  const sizeGroups = groupBy(sizeFilteredRows, '__size').sort((x,y)=>y.qty-x.qty);
+  const topSizeObj = sizeGroups[0] || {name:'—', qty:0};
+
+  $('sizeCount').textContent = fmt(sizeGroups.length);
+  $('topSize').textContent = topSizeObj.name;
+  $('topSizePct').textContent = pct(share(topSizeObj.qty, sizeAgg.qty));
+  $('unknownSize').textContent = fmt((sizeGroups.find(x=>x.name.toLowerCase() === 'unmapped')||{qty:0}).qty);
+
+  // Ensure we pass the PERCENTAGE as the chart data, and format the labels correctly
+  const qtyPercents = sizeGroups.map(x=>share(x.qty, sizeAgg.qty));
+  const salesPercents = sizeGroups.map(x=>share(x.sales, sizeAgg.sales));
+
+  setChart('sizeQtyChart','doughnut',sizeGroups.map(x=>x.name),[{
+    label: 'Quantity %',
+    data: qtyPercents,
+    suffix: '%'
+  }]);
+  
+  setChart('sizeSalesChart','doughnut',sizeGroups.map(x=>x.name),[{
+    label: 'Sales %',
+    data: salesPercents,
+    suffix: '%'
+  }]);
+  
+  tableRows('sizeRows',sizeGroups,[
+    {k:'name'},
+    {k:'qty',num:true},
+    {num:true,v:r=>pct(share(r.qty,sizeAgg.qty))},
+    {k:'sales',num:true,v:r=>money(r.sales)},
+    {num:true,v:r=>pct(share(r.sales,sizeAgg.sales))},
+    {num:true,v:r=>fmt(r.items.size)}
+  ]);
+
+  // 3. Store-wise Breakdown Table
+  const storeSizeMap = new Map();
+  sizeFilteredRows.forEach(r => {
+    const storeName = r.__store;
+    const sizeName = r.__size;
+    if (!storeSizeMap.has(storeName)) {
+      storeSizeMap.set(storeName, { name: storeName, qty: 0, sales: 0, sizes: {} });
+    }
+    const rec = storeSizeMap.get(storeName);
+    rec.qty += r.__qty;
+    rec.sales += r.__sales;
+    if (!rec.sizes[sizeName]) rec.sizes[sizeName] = 0;
+    rec.sizes[sizeName] += r.__qty;
+  });
+
+  const storeSizeList = [...storeSizeMap.values()].sort((a,b)=>b.sales - a.sales);
+  
+  // Find unique size names to make columns
+  const uniqueSizes = [...new Set(sizeFilteredRows.map(r => r.__size))].sort();
+  
+  // Clear existing dynamic headers and rebuild them cleanly
+  const headerRow = $('storeSizeHeaderRow');
+  // Remove all but the first 3 static columns
+  while (headerRow.children.length > 3) {
+    headerRow.removeChild(headerRow.lastChild);
+  }
+
+  // Add new headers for sizes (Show all to prevent missing items like Tall/Short)
+  const sizeCols = uniqueSizes; 
+  sizeCols.forEach(sizeName => {
+    const th = document.createElement('th');
+    th.className = 'num';
+    th.textContent = sizeName + ' %';
+    headerRow.appendChild(th);
+  });
+
+  const storeSizeTableRows = storeSizeList.map(s => {
+    const rowData = { name: s.name, qty: s.qty, sales: s.sales };
+    sizeCols.forEach(sizeName => {
+      const sizeQty = s.sizes[sizeName] || 0;
+      // Percentage of that specific store's total qty
+      rowData['size_' + sizeName] = pct(share(sizeQty, s.qty));
+    });
+    return rowData;
+  });
+
+  const storeSizeCols = [
+    {k:'name'},
+    {k:'qty', num:true},
+    {k:'sales', num:true, v:r=>money(r.sales)}
+  ];
+  sizeCols.forEach(sizeName => {
+    storeSizeCols.push({num:true, v:r=>r['size_' + sizeName]});
+  });
+
+  tableRows('storeSizeRows', storeSizeTableRows, storeSizeCols);
   
   updateSortIcons();
   if($('view-compare').classList.contains('active'))runComparison()
 }
+
 function renderSourceViews(){
+  // Data sources should NOT be affected by dashboard filters. They audit the raw dataset.
   if(!rawRows.length)return;
   const items=new Map(); let totalMatchedRows = 0; let totalUnmatchedRows = 0;
   rawRows.forEach(r=>{
@@ -755,16 +1061,38 @@ function renderSourceViews(){
     const x=items.get(k); x.qty+=r.__qty; x.sales+=r.__sales; if(!r.__catMatched)x.status='Unmapped'
   });
   $('mapMatchedRows').textContent = fmt(totalMatchedRows); $('mapUnmatchedRows').textContent = fmt(totalUnmatchedRows);
-  const im=[...items.values()].filter(x=>filteredRows.some(r=>r.__item===x.item)).sort((a,b)=>a.item.localeCompare(b.item));
+  const im=[...items.values()].sort((a,b)=>a.item.localeCompare(b.item));
   $('mappingCount').textContent=`${fmt(im.length)} unique items`;
   tableRows('mappingRows',im,[{k:'item'},{k:'product'},{k:'size'},{k:'category'},{k:'sub'},{k:'status',html:v=>`<span class="pill" style="background:${v==='Matched'?'#e8f8f3':'#fff0f0'};color:${v==='Matched'?'#11866d':'#b33'}">${esc(v)}</span>`},{k:'qty',num:true},{k:'sales',num:true,v:r=>money(r.sales)}]);
+  
   const stores=new Map(); rawRows.forEach(r=>{const k=r.__storeId;if(!stores.has(k))stores.set(k,{id:k,name:r.__store,manager:r.__manager,status:r.__allocMatched?'Matched':'Unmatched',qty:0,sales:0});const x=stores.get(k);x.qty+=r.__qty;x.sales+=r.__sales;if(!r.__allocMatched)x.status='Unmatched'});
-  const st=[...stores.values()].filter(x=>filteredRows.some(r=>r.__storeId===x.id)).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  const st=[...stores.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id)));
   $('allocationCount').textContent=`${fmt(st.length)} stores • ${fmt(st.filter(x=>x.status==='Unmatched').length)} unmatched`;
   tableRows('allocationRows',st,[{k:'id'},{k:'name'},{k:'manager'},{k:'status',html:v=>`<span class="pill" style="background:${v==='Matched'?'#e8f8f3':'#fff0f0'};color:${v==='Matched'?'#11866d':'#b33'}">${esc(v)}</span>`},{k:'qty',num:true},{k:'sales',num:true,v:r=>money(r.sales)}])
 }
+
 function initComparisonDates(){const dates=[...new Set(rawRows.map(r=>r.__date).filter(Boolean))].sort();if(!dates.length)return;const mid=Math.max(1,Math.ceil(dates.length/2));$('aStart').value=dates[0];$('aEnd').value=dates[mid-1];$('bStart').value=dates[mid]||dates[dates.length-1];$('bEnd').value=dates[dates.length-1]}
-function runComparison(){if(!rawRows.length)return;const key=$('compareBy').value,aS=$('aStart').value,aE=$('aEnd').value,bS=$('bStart').value,bE=$('bEnd').value;const inPeriod=(r,s,e)=>!!r.__date&&(!s||r.__date>=s)&&(!e||r.__date<=e);const base=filteredRows.filter(r=>r.__date);const A=base.filter(r=>inPeriod(r,aS,aE)),B=base.filter(r=>inPeriod(r,bS,bE));const aa=aggregate(A),bb=aggregate(B),change=(x,y)=>x?((y-x)/Math.abs(x))*100:(y?100:0);$('aSales').textContent=money(aa.sales);$('bSales').textContent=money(bb.sales);$('salesChange').textContent=pct(change(aa.sales,bb.sales));$('qtyChange').textContent=pct(change(aa.qty,bb.qty));const aggregateBy=rows=>{const m=new Map();rows.forEach(r=>{const name=String(r[key]||'Unmapped');if(!m.has(name))m.set(name,{name,qty:0,sales:0});m.get(name).qty+=r.__qty;m.get(name).sales+=r.__sales});return m};const ma=aggregateBy(A),mb=aggregateBy(B),names=[...new Set([...ma.keys(),...mb.keys()])];const results=names.map(name=>{const x=ma.get(name)||{qty:0,sales:0},y=mb.get(name)||{qty:0,sales:0};return {name,aq:x.qty,bq:y.qty,as:x.sales,bs:y.sales,qchange:change(x.qty,y.qty),schange:change(x.sales,y.sales)}}).sort((x,y)=>y.bs-x.bs);setChart('compareChart','bar',results.slice(0,20).map(x=>x.name),[{label:'Period A sales',data:results.slice(0,20).map(x=>x.as),backgroundColor:'#3267e9'},{label:'Period B sales',data:results.slice(0,20).map(x=>x.bs),backgroundColor:'#18a88b'}]);tableRows('compareRows',results,[{k:'name'},{k:'aq',num:true},{k:'bq',num:true},{k:'qchange',num:true,v:r=>pct(r.qchange)},{k:'as',num:true,v:r=>money(r.as)},{k:'bs',num:true,v:r=>money(r.bs)},{k:'schange',num:true,v:r=>pct(r.schange)}]);}
+
+function runComparison(){
+  if(!rawRows.length)return;
+  // Compare runs on raw rows without specific dashboard filters, 
+  // since it has its own date selectors to define periods A and B.
+  const key=$('compareBy').value,aS=$('aStart').value,aE=$('aEnd').value,bS=$('bStart').value,bE=$('bEnd').value;
+  const inPeriod=(r,s,e)=>!!r.__date&&(!s||r.__date>=s)&&(!e||r.__date<=e);
+  
+  const A=rawRows.filter(r=>inPeriod(r,aS,aE)),B=rawRows.filter(r=>inPeriod(r,bS,bE));
+  const aa=aggregate(A),bb=aggregate(B),change=(x,y)=>x?((y-x)/Math.abs(x))*100:(y?100:0);
+  
+  $('aSales').textContent=money(aa.sales);$('bSales').textContent=money(bb.sales);
+  $('salesChange').textContent=pct(change(aa.sales,bb.sales));$('qtyChange').textContent=pct(change(aa.qty,bb.qty));
+  
+  const aggregateBy=rows=>{const m=new Map();rows.forEach(r=>{const name=String(r[key]||'Unmapped');if(!m.has(name))m.set(name,{name,qty:0,sales:0});m.get(name).qty+=r.__qty;m.get(name).sales+=r.__sales});return m};
+  const ma=aggregateBy(A),mb=aggregateBy(B),names=[...new Set([...ma.keys(),...mb.keys()])];
+  const results=names.map(name=>{const x=ma.get(name)||{qty:0,sales:0},y=mb.get(name)||{qty:0,sales:0};return {name,aq:x.qty,bq:y.qty,as:x.sales,bs:y.sales,qchange:change(x.qty,y.qty),schange:change(x.sales,y.sales)}}).sort((x,y)=>y.bs-x.bs);
+  
+  setChart('compareChart','bar',results.slice(0,20).map(x=>x.name),[{label:'Period A sales',data:results.slice(0,20).map(x=>x.as),backgroundColor:'#3267e9'},{label:'Period B sales',data:results.slice(0,20).map(x=>x.bs),backgroundColor:'#18a88b'}]);
+  tableRows('compareRows',results,[{k:'name'},{k:'aq',num:true},{k:'bq',num:true},{k:'qchange',num:true,v:r=>pct(r.qchange)},{k:'as',num:true,v:r=>money(r.as)},{k:'bs',num:true,v:r=>money(r.bs)},{k:'schange',num:true,v:r=>pct(r.schange)}]);
+}
 $('compareBtn').addEventListener('click',runComparison);
 
 // Attach click listeners to sortable headers
@@ -781,14 +1109,49 @@ document.querySelectorAll('th.sortable').forEach(th => {
   });
 });
 
-document.querySelectorAll('.navitem[data-view]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.navitem[data-view]').forEach(b=>b.classList.toggle('active',b===btn));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+btn.dataset.view));const titles={upload:'Data Ingestion',overview:'Menu Mix Dashboard',products:'Product Performance',stores:'Store Performance',menumix:'Menu Mix',sizes:'Size Mix %',compare:'Comparison View',mapping:'Category Mapping',allocation:'Store Allocation'};const subtitles={upload:'Upload your 3 files to begin building the intelligence dashboard.',overview:'Overview of sales and performance across all dimensions.'};$('pageTitle').textContent=titles[btn.dataset.view]||'Menu Mix Dashboard';$('pageSubtitle').textContent=subtitles[btn.dataset.view]||'Upload your 3 files, match product and store metadata, then explore sales and unit mix.';if(btn.dataset.view==='compare')runComparison();if(btn.dataset.view==='mapping'||btn.dataset.view==='allocation')renderSourceViews()}));
-$('exportBtn').addEventListener('click',()=>{if(!filteredRows.length)return;const cols=[['Store ID','__storeId'],['Store Name','__store'],['Date','__date'],['Item Code','__item'],['Product','__product'],['Qty','__qty'],['Sales','__sales'],['Size','__size'],['Category','__category'],['Sub Category','__sub'],['Area Manager','__manager']];const lines=[cols.map(c=>c[0]).join(',')];filteredRows.forEach(r=>lines.push(cols.map(c=>'"'+String(r[c[1]]??'').replace(/"/g,'""')+'"').join(',')));const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ViewX_Menu_Mix_Analysis.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
+// Navigation
+document.querySelectorAll('.navitem[data-view]').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.navitem[data-view]').forEach(b=>b.classList.toggle('active',b===btn));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+btn.dataset.view));
+  
+  // Toggle Global Filters Bar: Show only on main dashboard views
+  const mainViews = ['overview', 'products', 'stores', 'menumix'];
+  $('globalFiltersBar').style.display = mainViews.includes(btn.dataset.view) ? 'block' : 'none';
+
+  const titles={upload:'Data Ingestion',overview:'Menu Mix Dashboard',products:'Product Performance',stores:'Store Performance',menumix:'Menu Mix',sizes:'Size Mix %',compare:'Comparison View',mapping:'Category Mapping',allocation:'Store Allocation'};
+  const subtitles={upload:'Upload your 3 files to begin building the intelligence dashboard.',overview:'Overview of sales and performance across all dimensions.'};
+  $('pageTitle').textContent=titles[btn.dataset.view]||'Menu Mix Dashboard';
+  $('pageSubtitle').textContent=subtitles[btn.dataset.view]||'Upload your 3 files, match product and store metadata, then explore sales and unit mix.';
+  
+  if(btn.dataset.view==='compare')runComparison();
+}));
+
+$('exportBtn').addEventListener('click',()=>{
+  if(!rawRows.length)return;
+  const globalRows = rawRows.filter(r => 
+    matchMulti(globalFilters.ams, r.__manager) && 
+    matchMulti(globalFilters.stores, r.__store) && 
+    matchMulti(globalFilters.cats, r.__category) && 
+    matchMulti(globalFilters.subs, r.__sub) && 
+    matchMulti(globalFilters.sizes, r.__size) && 
+    matchMulti(globalFilters.prods, r.__longName) && 
+    (!globalFilters.start || !r.__date || r.__date >= globalFilters.start) && 
+    (!globalFilters.end || !r.__date || r.__date <= globalFilters.end)
+  );
+  
+  const cols=[['Store ID','__storeId'],['Store Name','__store'],['Date','__date'],['Item Code','__item'],['Product','__product'],['Qty','__qty'],['Sales','__sales'],['Size','__size'],['Category','__category'],['Sub Category','__sub'],['Area Manager','__manager']];
+  const lines=[cols.map(c=>c[0]).join(',')];
+  globalRows.forEach(r=>lines.push(cols.map(c=>'"'+String(r[c[1]]??'').replace(/"/g,'""')+'"').join(',')));
+  const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='ViewX_Menu_Mix_Analysis.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
 
 $('resetBtn').addEventListener('click',()=>{
   files={menu:null,category:null,allocation:null};
   ['menuFile','categoryFile','allocationFile'].forEach(id=>$(id).value='');
   ['menuName','categoryName','allocationName'].forEach(id=>$(id).textContent='No file selected');
-  rawRows=[];filteredRows=[];categoryRows=[];allocationRows=[];
+  rawRows=[];categoryRows=[];allocationRows=[];
   $('dashboard').classList.add('hidden');
   $('buildBtn').disabled=true;
   $('exportBtn').disabled=true;

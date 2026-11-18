@@ -679,9 +679,47 @@ const SUPABASE={
   url:'https://lktzoodnektvuznpkswq.supabase.co',
   anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdHpvb2RuZWt0dnV6bnBrc3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ5MzMxMjQsImV4cCI6MjExMDUwOTEyNH0.a80uHPYiJSdwruUsmxduyEv0hZr2RtL8wW9-d6NWfXk',
   bucket:'Menu Mix',
-  files:{menu:'Menu Mix.xlsx',category:'Category.xlsx',allocation:'Allocation.csv',users:'Users.csv'}
+  files:{menu:'Menu Mix.xlsx',category:'Category.xlsx',allocation:'Allocation.csv'}
 };
 const AUTHMODE=!!(SUPABASE.url&&SUPABASE.anonKey);
+/* ONE SIGN-IN: people sign in on the Sales dashboard (drcafe-bi.com). Its sign-in is checked by the
+   sales-sso function in this project, which copies the person's role and stores from the Sales
+   dashboard and starts a Menu Mix session. Inside the Sales dashboard the sign-in is passed in
+   automatically; opened on its own, this page asks for the Sales dashboard email and password. */
+const SALES={url:'https://gwpzztcojzirwdqdwikq.supabase.co',anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3cHp6dGNvanppcndkcWR3aWtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyMjAxNTYsImV4cCI6MjEwODc5NjE1Nn0._TFYNKT1LYj4y6nSJRtmCLiMB756QmEgV_6atAweUu0'};
+const SHARED=window.self!==window.top;                                     // opened inside the Sales dashboard
+const PARENT_ORIGINS=['https://drcafe-bi.com','https://www.drcafe-bi.com']; // where the Sales dashboard is hosted
+let parentToken='',tokenWaiters=[];
+const tokenExp=t=>{try{const p=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(p+'='.repeat((4-p.length%4)%4))).exp*1000}catch(e){return 0}};
+function salesTokenFromParent(){
+  if(parentToken&&tokenExp(parentToken)-Date.now()>60000)return Promise.resolve(parentToken);
+  return new Promise((resolve,reject)=>{
+    const t=setTimeout(()=>reject(Error('no sign-in from the Sales dashboard — sign in there and reopen Menu Mix')),10000);
+    tokenWaiters.push(tok=>{clearTimeout(t);resolve(tok)});
+    PARENT_ORIGINS.forEach(o=>window.parent.postMessage({type:'viewx-need-session'},o));
+  });
+}
+window.addEventListener('message',e=>{
+  if(!SHARED||e.source!==window.parent||!PARENT_ORIGINS.includes(e.origin))return;
+  const d=e.data||{};
+  if(d.type==='viewx-session'&&typeof d.access_token==='string'){parentToken=d.access_token;tokenWaiters.splice(0).forEach(f=>f(parentToken))}
+  else if(d.type==='viewx-signout'){
+    parentToken='';ME=null;rawRows=[];deleteFromDB(CACHE_KEY);
+    try{sb().auth.signOut({scope:'local'}).catch(()=>{})}catch(err){}
+    $('dashboard').classList.add('hidden');$('userBox').classList.add('hidden');showView('upload');
+    setNavState('error','Signed out in the Sales dashboard');
+    setSrcStatus('Signed out. Sign in to the Sales dashboard to see Menu Mix.',true);
+  }
+});
+// Swaps a Sales dashboard sign-in for a Menu Mix session (the sales-sso function checks it with the Sales project)
+async function exchangeSalesToken(token){
+  const res=await fetch(`${SUPABASE.url}/functions/v1/sales-sso`,{method:'POST',
+    headers:{'Content-Type':'application/json',apikey:SUPABASE.anonKey},body:JSON.stringify({token})});
+  const j=await res.json().catch(()=>({}));
+  if(!res.ok||!j.access_token)throw Error(j.error||('sign-in failed (HTTP '+res.status+')'));
+  const {error}=await sb().auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});
+  if(error)throw error;
+}
 let sbClient=null;
 function sb(){
   if(sbClient)return sbClient;
@@ -926,11 +964,12 @@ async function adminSync(status){
   const c=sb(),F=SUPABASE.files;
   const {data:ver,error}=await c.rpc('mm_version');if(error)throw error;
   const have=ver&&ver.files||{},list=await stList(),find=k=>stFind(list,F[k]);
-  for(const [k,fn,label] of [['users','mm_replace_users','Users'],['category','mm_replace_category','Category mapping'],['allocation','mm_replace_allocation','Store allocation']]){
+  // Users are managed in the Sales dashboard now, so only the two mapping files are copied
+  for(const [k,fn,label] of [['category','mm_replace_category','Category mapping'],['allocation','mm_replace_allocation','Store allocation']]){
     const f=find(k);if(!f||have[k]===stSig(f))continue;
     status('loading',`Updating ${label}…`);
     const file=await stDownload(f),sheet=await readSheet(file);
-    const rows=k==='users'?parseUsers(sheet):parseRef(k,sheet,file.name).rows;
+    const rows=parseRef(k,sheet,file.name).rows;
     const {error:e}=await c.rpc(fn,{p_rows:rows,p_sig:stSig(f)});if(e)throw Error(`${label}: ${e.message}`);
   }
   const fm=find('menu');
@@ -995,6 +1034,7 @@ async function startAuthed(){
   let parsed=null,syncProblem='';
   try{
     status('loading','Signing in…');
+    if(SHARED){status('loading','Signing in with the Sales dashboard…');await exchangeSalesToken(await salesTokenFromParent())}
     const {data:me,error}=await sb().rpc('mm_me');if(error)throw error;
     ME={...me,stores:me.stores||[]};showUser();
     parsed=await getFromDB(CACHE_KEY).catch(()=>null);
@@ -1007,7 +1047,9 @@ async function startAuthed(){
     else status('done',doneText);
   }catch(e){
     const m=errText(e);console.error(e);
-    if(/JWT|session|sign in/i.test(m)&&!ME){showLogin('Please sign in again.');return}
+    if(/JWT|session|sign in|Sales dashboard|no active access/i.test(m)&&!ME){
+      if(SHARED){status('error',m,true);showView('upload');return}
+      showLogin('Sign in with your Sales dashboard email and password.');return}
     if(rawRows.length)status('error','Showing the last loaded data — '+m,true);
     else{status('error','Could not load: '+m,true);showView('upload')}
   }finally{authLoading=false}
@@ -1024,12 +1066,17 @@ function showUser(){
   const n=(ME.stores||[]).length;
   $('userRole').textContent=(ROLE_LABEL[ME.role]||ME.role)+(ME.all?' • all stores':` • ${n} store${n===1?'':'s'}`);
   $('userBox').title=ME.email;
+  // Passwords belong to the Sales dashboard now; inside it, signing out is done there too
+  $('pwChangeBtn').classList.add('hidden');if(SHARED)$('signOutBtn').classList.add('hidden');
 }
 $('loginForm').addEventListener('submit',async e=>{
   e.preventDefault();const btn=$('loginBtn');btn.disabled=true;$('loginErr').textContent='';
   try{
-    const {error}=await sb().auth.signInWithPassword({email:$('loginEmail').value.trim(),password:$('loginPass').value});
+    // Sign in with the Sales dashboard account, then swap it for a Menu Mix session
+    const sales=window.supabase.createClient(SALES.url,SALES.anonKey,{auth:{persistSession:false,autoRefreshToken:false,storageKey:'viewx-mm-sales-signin'}});
+    const {data,error}=await sales.auth.signInWithPassword({email:$('loginEmail').value.trim(),password:$('loginPass').value});
     if(error)throw error;
+    await exchangeSalesToken(data.session.access_token);
     $('loginPass').value='';$('loginModal').classList.add('hidden');
     startAuthed();
   }catch(err){$('loginErr').textContent=/invalid login/i.test(errText(err))?'Wrong email or password.':'Could not sign in: '+errText(err)}
@@ -1051,6 +1098,7 @@ $('cpForm').addEventListener('submit',async e=>{
   catch(err){$('cpErr').textContent='Could not change it: '+errText(err)}
 });
 async function authBoot(){
+  if(SHARED){startAuthed();return} // inside the Sales dashboard: its sign-in is used, no login form
   try{
     const {data}=await sb().auth.getSession();
     if(data&&data.session)startAuthed();else showLogin();
@@ -2189,4 +2237,7 @@ $('resetBtn').addEventListener('click',()=>{
 // Libraries load with `defer`, so start once they are ready
 applyLockedMode();
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restoreFiles);else restoreFiles();
-</script></body></html>
+</script><script>!function(){if(window.self===window.top)return;var P=["https://drcafe-bi.com","https://www.drcafe-bi.com"];document.addEventListener("keydown",function(e){if(e.altKey&&!e.ctrlKey&&!e.metaKey&&("KeyS"===e.code||"s"===e.key||"S"===e.key)){e.preventDefault();P.forEach(function(o){try{window.parent.postMessage({type:"viewx-toggle-menumix"},o)}catch(x){}})}},!0)}();</script>
+<style>.frame-ctrl{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0}.userbox:not(.hidden)+.frame-ctrl{margin-left:0}.frame-ctrl .btn{width:34px;padding:0;font-size:15px;line-height:1}</style>
+<script>!function(){if(window.self===window.top)return;var P=["https://drcafe-bi.com","https://www.drcafe-bi.com"],nav=document.getElementById("topnav");if(!nav)return;function send(t){P.forEach(function(o){try{window.parent.postMessage({type:t},o)}catch(e){}})}var w=document.createElement("div");w.className="frame-ctrl";w.innerHTML='<button type="button" class="btn sm secondary" id="frameMin" title="Minimize (Alt+S)" aria-label="Minimize Menu Mix">&#8211;</button><button type="button" class="btn sm secondary" id="frameClose" title="Close Menu Mix" aria-label="Close Menu Mix">&#10005;</button>';nav.appendChild(w);w.querySelector("#frameMin").addEventListener("click",function(){send("viewx-minimize-menumix")});w.querySelector("#frameClose").addEventListener("click",function(){send("viewx-close-menumix")});send("viewx-frame-controls")}();</script>
+</body></html>

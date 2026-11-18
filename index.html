@@ -1952,4 +1952,241 @@ const MODAL={
     }
   },
   stores:{
-    html:()=>mPanel('Store Performance','Top 25 by sales',mChartBox('mc_storeperf',460))+mTablePanel('mtStorePerf','Store performance detai
+    html:()=>mPanel('Store Performance','Top 25 by sales',mChartBox('mc_storeperf',460))+mTablePanel('mtStorePerf','Store performance detail','<span id="mtStorePerfCount"></span>'),
+    fill(A,B){
+      const list=pairGroups(A,B,'__store');let rank=0;
+      mBars('mc_storeperf',list,25,true);$('mtStorePerfCount').textContent=`${fmt(list.length)} stores`;
+      mTable('mtStorePerf',['Rank','Store ID','Store','Area Manager'],[{v:()=>++rank},{v:r=>r.first.__storeId},{k:'name'},{v:r=>r.first.__manager}],list,byKey('__store','Store',modalCtx));
+    }
+  },
+  menumix:{
+    html:()=>`<div class="panel mgap">${mHead('Category sales mix','Amount')}${mDual('mc_mixcat')}</div>`
+      +mPanel('Sub-category sales mix','Top 20',mChartBox('mc_sub',420))
+      +mTablePanel('mtMix','Menu mix detail','Product contribution'),
+    fill(A,B){
+      mDonuts('mc_mixcat',pairGroups(A,B,'__category'),12);
+      mBars('mc_sub',pairGroups(A,B,'__sub'),20,true);
+      mTable('mtMix',['Item Code','Product','Category','Sub Category','Size'],[{k:'name'},{v:r=>r.first.__product},{v:r=>r.first.__category},{v:r=>r.first.__sub},{v:r=>r.first.__size}],pairGroups(A,B,'__item'),
+        {dim:'Product',ctx:modalCtx,label:r=>`${r.first.__product} (${r.name})`,match:r=>x=>x.__item===r.name});
+    }
+  },
+  sizes:{
+    html:()=>mKpis(['Active Sizes','Top size by units','Top size quantity %','Total units'])
+      +`<div class="panel mgap">${mHead('Size mix % by quantity','Share of units')}${mDual('mc_szq')}</div>`
+      +`<div class="panel mgap">${mHead('Size mix % by sales','Share of sales')}${mDual('mc_szs')}</div>`
+      +mTablePanel('mtSize','Size contribution table','Filtered by Size Group')
+      +mTablePanel('mtStoreSize','Store-wise Size Breakdown',"% of each store's total qty"),
+    fill(A,B,aa,bb){
+      const sizes=pairGroups(A,B,'__size').sort((x,y)=>(y.bq-x.bq)||(y.aq-x.aq));
+      const topBy=k=>sizes.reduce((best,x)=>x[k]>(best?best[k]:0)?x:best,null);
+      const ta=topBy('aq'),tb=topBy('bq');
+      mKpi(0,fmt(sizes.filter(x=>x.aq>0).length),fmt(sizes.filter(x=>x.bq>0).length));
+      mKpi(1,ta?ta.name:'—',tb?tb.name:'—');
+      mKpi(2,pct(ta?share(ta.aq,aa.qty):0),pct(tb?share(tb.bq,bb.qty):0));
+      mKpi(3,fmt(aa.qty),fmt(bb.qty),pctChange(aa.qty,bb.qty));
+      mDonuts('mc_szq',sizes,12,'q',true);mDonuts('mc_szs',sizes,12,'s',true);
+      const la=M.la,lb=M.lb,nh=t=>`<th class="num">${esc(t)}</th>`;
+      $('mtSizeHead').innerHTML=`<tr><th>Size</th>${[`${la} Qty`,`${la} Qty %`,`${lb} Qty`,`${lb} Qty %`,`${la} Sales`,`${la} Sales %`,`${lb} Sales`,`${lb} Sales %`].map(nh).join('')}</tr>`;
+      tableRows('mtSizeRows',sizes,[{k:'name'},{num:true,v:r=>fmt(r.aq)},{num:true,v:r=>pct(share(r.aq,aa.qty))},{num:true,v:r=>fmt(r.bq)},{num:true,v:r=>pct(share(r.bq,bb.qty))},{num:true,v:r=>money(r.as)},{num:true,v:r=>pct(share(r.as,aa.sales))},{num:true,v:r=>money(r.bs)},{num:true,v:r=>pct(share(r.bs,bb.sales))}],byKey('__size','Size',modalCtx));
+      // store-wise breakdown, both months
+      const sm=new Map(),rec=n=>{let x=sm.get(n);if(!x)sm.set(n,x={name:n,aq:0,bq:0,bs:0,sa:new Map(),sb:new Map()});return x};
+      A.forEach(r=>{const x=rec(r.__store);x.aq+=r.__qty;x.sa.set(r.__size,(x.sa.get(r.__size)||0)+r.__qty)});
+      B.forEach(r=>{const x=rec(r.__store);x.bq+=r.__qty;x.bs+=r.__sales;x.sb.set(r.__size,(x.sb.get(r.__size)||0)+r.__qty)});
+      const names=sizes.map(x=>x.name).sort(),cols=[{k:'name'},{num:true,v:r=>fmt(r.aq)},{num:true,v:r=>fmt(r.bq)}];
+      names.forEach(s=>{cols.push({num:true,v:r=>pct(share(r.sa.get(s)||0,r.aq))});cols.push({num:true,v:r=>pct(share(r.sb.get(s)||0,r.bq))})});
+      $('mtStoreSizeHead').innerHTML=`<tr><th>Store</th>${nh(`${la} Total Qty`)}${nh(`${lb} Total Qty`)}${names.map(s=>nh(`${s} % ${la}`)+nh(`${s} % ${lb}`)).join('')}</tr>`;
+      tableRows('mtStoreSizeRows',[...sm.values()].sort((x,y)=>(y.bs-x.bs)||(y.aq-x.aq)),cols,byKey('__store','Store',modalCtx));
+    }
+  }
+};
+
+function openMonthCompare(){
+  if(!rawRows.length||!MODAL[activeView])return;
+  modalView=activeView;
+  const yms=[...new Set(idx.dateList.map(d=>d.slice(0,7)))];
+  const opts=yms.map(ym=>`<option value="${ym}">${ymLabel(ym)}</option>`).join('');
+  $('mA').innerHTML=opts;$('mB').innerHTML=opts;
+  if(yms.length){$('mA').value=yms[Math.max(0,yms.length-2)];$('mB').value=yms[yms.length-1]}
+  $('mFrom').value='';$('mTo').value='';
+  $('cmpTitle').textContent=`${TITLES[modalView]} — 2-month comparison`;
+  $('cmpSub').textContent=modalView==='sizes'
+    ?`Size group: ${SIZE_GROUP_LABEL[currentSizeGroup]}. Uses the Size Mix Area Manager and Store filters.`
+    :'Uses the current dashboard filters (Area Manager, Store, Category, Sub Category, Size, Product).';
+  // rebuild the popup's sections as a copy of this module's layout
+  Object.keys(charts).filter(k=>k.startsWith('mc_')).forEach(k=>{charts[k].destroy();delete charts[k]});
+  $('mSections').innerHTML=MODAL[modalView].html();
+  $('cmpModal').classList.remove('hidden');document.body.style.overflow='hidden';$('cmpModal').scrollTop=0;
+  renderMonthCompare();
+}
+function closeMonthCompare(){$('cmpModal').classList.add('hidden');document.body.style.overflow=''}
+function renderMonthCompare(){
+  const a=$('mA').value,b=$('mB').value;if(!a||!b)return;
+  const from=Math.max(0,parseInt($('mFrom').value,10)||0),to=Math.max(0,parseInt($('mTo').value,10)||0);
+  const mf=ym=>({y:new Set([+ym.slice(0,4)]),m:new Set([+ym.slice(5,7)]),from,to,any:true});
+  const fa=mf(a),fb=mf(b),pred=moduleRowFilter(modalView),A=[],B=[];
+  for(let i=0;i<rawRows.length;i++){const r=rawRows[i];if(!r.__y||!pred(r))continue;if(dateOK(r,fa))A.push(r);if(dateOK(r,fb))B.push(r)}
+  M.la=ymLabel(a,true);M.lb=ymLabel(b,true);M.laFull=ymLabel(a);M.lbFull=ymLabel(b);M.A=A;M.B=B;
+  MODAL[modalView].fill(A,B,aggregate(A),aggregate(B));
+}
+$('topCmp').addEventListener('click',openMonthCompare);
+$('cmpClose').addEventListener('click',closeMonthCompare);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cmpModal').classList.contains('hidden')&&$('pwModal').classList.contains('hidden')&&$('drillModal').classList.contains('hidden'))closeMonthCompare()});
+['mA','mB'].forEach(id=>$(id).addEventListener('change',renderMonthCompare));
+['mFrom','mTo'].forEach(id=>$(id).addEventListener('input',debounce(renderMonthCompare,250)));
+
+/* =========================================
+   EXPORT PDF
+   The report starts below the filter bar. Every card (figures, chart, table) is placed
+   whole on a page; long tables are printed in full and only ever split between rows,
+   with the column headings repeated on the next page.
+   ========================================= */
+const PDF_LIBS=['https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'];
+const scriptLoads={};
+// PDF libraries are fetched only the first time a PDF is exported, so they don't slow page load
+function loadScript(src){return scriptLoads[src]||(scriptLoads[src]=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>{delete scriptLoads[src];reject(Error('could not load the PDF library (internet connection needed)'))};document.head.appendChild(s)}))}
+const exportName=(title,ext)=>`ViewX_${String(title).replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'')}_${new Date().toISOString().slice(0,10)}.${ext}`;
+
+// the cards that make up a view, skipping filter bars, toolbars and notes
+function pdfBlocks(root){
+  const out=[];
+  (function walk(el){
+    for(const c of el.children){
+      if(c.matches('.filters,.toolbar,.compare-controls,.cmp-head,.note,.section-title,.footer,script,[data-html2canvas-ignore]'))continue;
+      if(getComputedStyle(c).display==='none')continue;
+      if(c.matches('.kpis,.panel,.charts'))out.push(c);
+      else if(c.matches('.table-panel')){if(c.querySelector('.panel,.kpis,.table-panel'))walk(c);else out.push(c)}
+      else walk(c);
+    }
+  })(root);
+  return out;
+}
+// small heading for the first page: title, export time and the filters in force
+function pdfHeader(title,scopes,width,note){
+  const parts=[];
+  scopes.forEach(sc=>{
+    sc.querySelectorAll('.filter,.control').forEach(f=>{
+      const lab=f.querySelector('label');if(!lab)return;
+      const ms=f.querySelector('.ms-btn-text'),inp=f.querySelector(':scope>input,:scope>select');
+      if(!ms&&!inp)return;
+      const v=ms?ms.textContent:(inp.tagName==='SELECT'?(inp.selectedOptions[0]?inp.selectedOptions[0].textContent:''):inp.value);
+      if(v!==''&&!/^All\b/.test(v))parts.push([lab.textContent.trim(),v]);
+    });
+    sc.querySelectorAll('.metric-toggle button.active').forEach(b=>parts.push(['Showing',b.textContent.trim()]));
+  });
+  const d=document.createElement('div');
+  d.style.cssText=`position:absolute;left:-10000px;top:0;width:${Math.round(width)}px;padding:2px 2px 6px;background:#f4f7fb`;
+  d.innerHTML=`<div class="eyebrow">ViewX • Menu Mix Intelligence</div><div style="font-size:24px;font-weight:800;margin:6px 0 5px">${esc(title)}</div><div class="subtitle" style="line-height:1.6">Exported ${esc(new Date().toLocaleString())} • ${note?esc(note):parts.length?parts.map(p=>`<b>${esc(p[0])}:</b> ${esc(p[1])}`).join(' • '):'All data'}</div>`;
+  document.body.appendChild(d);
+  return d;
+}
+// picture of one card; tables are opened up to their full length first
+async function pdfCapture(el){
+  const info={rows:[],head:null};
+  const estimate=el.offsetHeight+el.querySelectorAll('tbody tr').length*34;
+  const canvas=await html2canvas(el,{scale:Math.max(1,Math.min(2,15000/Math.max(1,estimate))),backgroundColor:'#f4f7fb',logging:false,onclone:(doc,c)=>{
+    c.querySelectorAll('.table-col').forEach(x=>{x.style.height='auto'});
+    c.querySelectorAll('.table-wrap').forEach(w=>{w.style.setProperty('max-height','none','important');w.style.overflow='visible';w.style.flex='none'});
+    c.querySelectorAll('tfoot td,th').forEach(x=>{x.style.position='static'}); // Total row and headings in normal flow for the picture
+    const tables=c.querySelectorAll('table');if(tables.length!==1)return;
+    const base=c.getBoundingClientRect(),th=tables[0].tHead;
+    if(th){const r=th.getBoundingClientRect();info.head={x:r.left-base.left,y:r.top-base.top,w:r.width,h:r.height}}
+    tables[0].querySelectorAll('tbody tr').forEach(tr=>info.rows.push(tr.getBoundingClientRect().bottom-base.top));
+    info.cssWidth=base.width;
+  }});
+  return {canvas,info};
+}
+async function exportPDF(root,title,btn,scopes,note){
+  const label=btn.textContent;btn.disabled=true;btn.textContent='Preparing PDF…';
+  let header=null;
+  try{
+    await Promise.all(PDF_LIBS.map(loadScript));
+    closeAllDropdowns();
+    const blocks=pdfBlocks(root);if(!blocks.length)throw Error('nothing to export in this view');
+    header=pdfHeader(title,scopes,blocks[0].getBoundingClientRect().width,note);
+    const pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+    const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight(),margin=22,gap=10,iw=pw-2*margin,ih=ph-2*margin;
+    const paint=()=>{pdf.setFillColor(244,247,251);pdf.rect(0,0,pw,ph,'F')};
+    let y=margin;paint();
+    const newPage=()=>{pdf.addPage();paint();y=margin};
+    const put=(cv,w=iw)=>{const h=cv.height*(w/cv.width);pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',margin+(iw-w)/2,y,w,h);y+=h};
+    const all=[header,...blocks];
+    for(let n=0;n<all.length;n++){
+      btn.textContent=`Preparing PDF… ${n+1}/${all.length}`;
+      const {canvas,info}=await pdfCapture(all[n]);
+      const r=iw/canvas.width,hPt=canvas.height*r;
+      if(hPt<=ph-margin-y)put(canvas);                       // fits on this page
+      else if(hPt<=ih){newPage();put(canvas)}                 // fits on a fresh page
+      else if(!info.rows.length){newPage();put(canvas,iw*ih/hPt)} // tall card with no table: shrink to one page
+      else{                                                   // long table: split between rows only
+        const s=canvas.width/(info.cssWidth||canvas.width),breaks=info.rows.map(v=>Math.round(v*s));
+        const head=info.head&&{x:Math.floor(info.head.x*s),y:Math.floor(info.head.y*s),w:Math.ceil(info.head.w*s),h:Math.ceil(info.head.h*s)};
+        let top=0,first=true,guard=0;
+        if(ph-margin-y<150)newPage();
+        while(top<canvas.height-1&&guard++<500){
+          const headH=first||!head?0:head.h,maxPx=Math.floor((ph-margin-y)/r)-headH;
+          let end=0;
+          if(maxPx>0){
+            if(canvas.height-top<=maxPx)end=canvas.height;
+            else for(const b of breaks){if(b>top&&b<=top+maxPx)end=b;else if(b>top+maxPx)break}
+          }
+          if(!end){if(y>margin+1){newPage();continue}end=Math.min(canvas.height,top+Math.max(50,maxPx))}
+          const slice=document.createElement('canvas');slice.width=canvas.width;slice.height=headH+(end-top);
+          const g=slice.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,slice.width,slice.height);
+          if(headH)g.drawImage(canvas,head.x,head.y,head.w,head.h,head.x,0,head.w,head.h);
+          g.drawImage(canvas,0,top,canvas.width,end-top,0,headH,canvas.width,end-top);
+          put(slice);top=end;first=false;
+          if(canvas.height-top<40*s)break; // only the card's bottom edge is left
+          newPage();
+        }
+      }
+      y+=gap;
+    }
+    const pages=pdf.getNumberOfPages(),foot=String(title).replace(/[^\x20-\x7E]+/g,'-');
+    for(let i=1;i<=pages;i++){pdf.setPage(i);pdf.setFontSize(8);pdf.setTextColor(138,151,169);pdf.text(`ViewX - ${foot} - Page ${i} of ${pages}`,pw/2,ph-8,{align:'center'})}
+    pdf.save(exportName(title,'pdf'));
+  }catch(e){console.error(e);alert('Could not create the PDF: '+e.message)}
+  finally{if(header)header.remove();btn.disabled=false;btn.textContent=label}
+}
+$('topPdf').addEventListener('click',e=>exportPDF($('view-'+activeView),TITLES[activeView]||'Dashboard',e.currentTarget,GLOBAL_VIEWS.includes(activeView)?[$('globalFiltersBar'),$('view-'+activeView)]:[$('view-'+activeView)]));
+$('cmpPdf').addEventListener('click',e=>exportPDF($('cmpBody'),$('cmpTitle').textContent,e.currentTarget,[$('cmpBody')]));
+
+const CSV_COLS=[['Store ID','__storeId'],['Store Name','__store'],['Date','__date'],['Item Code','__item'],['Product','__product'],['Qty','__qty'],['Sales','__sales'],['Size','__size'],['Category','__category'],['Sub Category','__sub'],['Area Manager','__manager']];
+// rows -> CSV download; extra = [[heading, row=>value], ...] columns put in front
+function downloadCSV(rows,fileName,extra=[]){
+  const cols=[...extra,...CSV_COLS.map(([h,k])=>[h,r=>r[k]])];
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  // build in chunks so very large exports don't create one giant intermediate string
+  const parts=['\ufeff'+cols.map(c=>c[0]).join(',')+'\r\n'];let buf='';
+  for(let i=0;i<rows.length;i++){const r=rows[i];let line='';
+    for(let j=0;j<cols.length;j++)line+=(j?',':'')+q(cols[j][1](r));
+    buf+=line+'\r\n';if((i&8191)===8191){parts.push(buf);buf=''}}
+  parts.push(buf);
+  const blob=new Blob(parts,{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=fileName;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$('exportBtn').addEventListener('click',()=>{if(rawRows.length)downloadCSV(gc().rows,'ViewX_Menu_Mix_Analysis.csv')});
+// 2-month popup: the rows behind both months, Month A first, with a Month column
+$('cmpCsv').addEventListener('click',()=>{
+  if(!M.A)return;
+  const rows=[...M.A.map(r=>[M.laFull,r]),...M.B.map(r=>[M.lbFull,r])];
+  downloadCSV(rows.map(([m,r])=>({...r,__month:m})),exportName(`${TITLES[modalView]} ${M.la} vs ${M.lb}`,'csv'),[['Month',r=>r.__month]]);
+});
+
+$('resetBtn').addEventListener('click',()=>{
+  // clears the sales data only; the category and allocation mappings are kept
+  files={menu:null};
+  $('menuFile').value='';$('menuName').textContent='No file selected';
+  rawRows=[];idx=null;gcache=null;dirty.clear();dateCache.clear();
+  $('dashboard').classList.add('hidden');
+  $('buildBtn').disabled=true;
+  $('exportBtn').disabled=true;
+  setMessage(idleMessage(),!refReady());
+  Object.values(charts).forEach(c=>c.destroy());charts={};
+  showView('upload');
+  deleteFromDB('menu');deleteFromDB(CACHE_KEY);
+});
+// Libraries load with `defer`, so start once they are ready
+applyLockedMode();
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restoreFiles);else restoreFiles();
+</script></body></html>

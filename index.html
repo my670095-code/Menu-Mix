@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ViewX | Menu Mix Intelligence</title>
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin="">
-<script defer="" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script defer="" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script defer="" src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
 :root{--navy:#14243b;--blue:#3267e9;--teal:#17a88b;--bg:#f4f7fb;--ink:#17243a;--muted:#718096;--line:#e5ebf3;--shadow:0 8px 24px rgba(20,36,59,.06)}
 *{box-sizing:border-box}
@@ -72,6 +73,12 @@ body{margin:0;background:var(--bg);font-family:Inter,Segoe UI,Arial,sans-serif;c
 .pw-box input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13px}
 .pw-box input:focus{outline:none;border-color:var(--blue)}
 .pw-err{color:#c14444;font-size:11px;min-height:15px;margin-top:6px}
+.login-overlay{z-index:3000;background:var(--bg)}
+.userbox{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.userbox .who{display:flex;flex-direction:column;text-align:right;line-height:1.3;max-width:220px}
+.userbox .who b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.userbox .who small{font-size:10px;color:var(--muted);white-space:nowrap}
+@media(max-width:1280px){.userbox #pwChangeBtn{display:none}}
 .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .cmp-overlay{position:fixed;inset:0;z-index:1000;background:var(--bg);overflow:auto}
 .cmp-body{padding:24px 28px 40px;min-height:100%;background:var(--bg)}
@@ -312,6 +319,11 @@ tbody.drillable tr:hover td{background:#e3edff}
     <button class="navitem" data-view="sizes"><span>％</span>Size Mix %</button>
     <button class="navitem" data-view="compare"><span>⇄</span>Comparison</button>
   </nav>
+  <div class="userbox hidden" id="userBox">
+    <div class="who"><b id="userName"></b><small id="userRole"></small></div>
+    <button type="button" class="btn sm secondary" id="pwChangeBtn">Change password</button>
+    <button type="button" class="btn sm secondary" id="signOutBtn">Sign out</button>
+  </div>
 </header>
 
 <main class="main">
@@ -328,7 +340,7 @@ tbody.drillable tr:hover td{background:#e3edff}
   <div class="view-actions hidden" id="topActions" data-html2canvas-ignore="true">
     <button class="btn sm primary" id="topCmp" title="Compare two months for this module in a full-screen window">⇄ Compare 2 months</button>
     <button class="btn sm secondary" id="topPdf" title="Download this view as a PDF">⭳ Export PDF</button>
-    <button class="btn sm secondary" id="exportBtn" title="Download the filtered sales rows as a CSV file (opens in Excel)" disabled="">⭳ Export Excel (CSV)</button>
+    <button class="btn sm secondary" id="exportBtn" title="Download the filtered sales rows as a CSV file (opens in Excel)" disabled>⭳ Export Excel (CSV)</button>
   </div>
 
 <!-- UPLOAD VIEW -->
@@ -351,13 +363,13 @@ tbody.drillable tr:hover td{background:#e3edff}
     </div>
   </section>
   <div class="toolbar" id="uploadToolbar">
-    <button class="btn primary" id="buildBtn" disabled="">Build Dashboard →</button>
+    <button class="btn primary" id="buildBtn" disabled>Build Dashboard →</button>
     <button class="btn secondary" id="resetBtn">Reset Sales Data</button>
     <div class="message" id="message">Upload the Menu Mix file to begin.</div>
   </div>
   <div class="toolbar">
-    <button class="btn secondary" id="bakeBtn" disabled="">Save mappings into dashboard file ⭳</button>
-    <button class="btn secondary" id="revertBtn" disabled="">Revert to built-in mappings</button>
+    <button class="btn secondary" id="bakeBtn" disabled>Save mappings into dashboard file ⭳</button>
+    <button class="btn secondary" id="revertBtn" disabled>Revert to built-in mappings</button>
     <div class="message" id="refNote"></div>
   </div>
   <div class="upload-card src-settings" id="srcSettings">
@@ -555,6 +567,32 @@ tbody.drillable tr:hover td{background:#e3edff}
 
 </section><div class="footer">ViewX • Menu Mix Intelligence • Data is processed locally in this browser.</div></main></div>
 <!-- PASSWORD PROMPT (protects the Category / Allocation mappings) -->
+<!-- SIGN-IN SCREEN (Supabase): everyone signs in; each person only receives their own stores -->
+<div class="pw-overlay login-overlay hidden" id="loginModal">
+  <form class="pw-box" id="loginForm">
+    <div class="brand" style="margin-bottom:16px"><div class="logo">V</div><div><h2>ViewX</h2><small>MENU MIX INTELLIGENCE</small></div></div>
+    <h3>Sign in</h3>
+    <p class="note">Use your dr.CAFE email and password.</p>
+    <input type="email" id="loginEmail" placeholder="Email" autocomplete="username" required style="margin-bottom:8px">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" required>
+    <div class="pw-err" id="loginErr"></div>
+    <button type="submit" class="btn primary" id="loginBtn" style="width:100%;margin-top:8px">Sign in</button>
+  </form>
+</div>
+<!-- CHANGE PASSWORD -->
+<div class="pw-overlay hidden" id="cpModal">
+  <form class="pw-box" id="cpForm">
+    <h3>Change password</h3>
+    <p class="note">At least 8 characters.</p>
+    <input type="password" id="cpNew" placeholder="New password" autocomplete="new-password" style="margin-bottom:8px">
+    <input type="password" id="cpNew2" placeholder="New password again" autocomplete="new-password">
+    <div class="pw-err" id="cpErr"></div>
+    <div class="toolbar" style="justify-content:flex-end;margin:14px 0 0">
+      <button type="button" class="btn secondary" id="cpCancel">Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</div>
 <div class="pw-overlay hidden" id="pwModal">
   <form class="pw-box" id="pwForm">
     <h3>🔒 Password required</h3>
@@ -613,7 +651,7 @@ tbody.drillable tr:hover td{background:#e3edff}
 </div>
 
 <!-- BUILT-IN MAPPINGS: the "Save mappings into dashboard file" button rewrites this block. -->
-<script id="embeddedRef" type="application/json">{"category":{"rows":[["712185","Juice","Juice","Unmapped","Orange Juice 200ml       ","Orange Juice 200ml       "],["712186","Juice","Juice","Unmapped","Heart Beat 200ml         ","Heart Beat 200ml         "],["712187","Juice","Juice","Unmapped","Stress Free 200ml        ","Stress Free 200ml        "],["712188","Juice","Juice","Unmapped","Black Lemon Aid 200ml    ","Black Lemon Aid 200ml    "],["731001","Food","Pastry","Unmapped","Biscoff Brownie          ","Biscoff Brownie          "],["731004","Food","Pastry","Unmapped","Chocolate Monarch        ","Chocolate Monarch        "],["731005","Food","Pastry","Unmapped","Mini Crepe Dulcey        ","Mini Crepe Dulcey        "],["731007","Food","Pastry","Unmapped","Pretzel Chewy Caramel    ","Pretzel Chewy Caramel    "],["731008","Food","Pastry","Unmapped","Florentine Chocolate     ","Florentine Chocolate     "],["724092","Food","Bagel","Unmapped","Cream Cheese Bagel       ","Cream Cheese Bagel       "],["724104","Food","Bagel","Unmapped","Roast Beef Bagel         ","Roast Beef Bagel         "],["724106","Food","Bagel","Unmapped","Egg & Cheese Bagel       ","Egg & Cheese Bagel       "],["724107","Food","Bagel","Unmapped","Halloumi Bagel Sandwich  ","Halloumi Bagel Sandwich  "],["724079","Food","Sandwich","Unmapped","Chkn Spice&Herb Baguette ","Chkn Spice&Herb Baguette "],["724080","Food","Sandwich","Unmapped","Smok Turkey Ciabatta Sdwh","Smok Turkey Ciabatta Sdwh"],["724108","Food","Sandwich","Unmapped","Smoke Chicken Sandwich   ","Smoke Chicken Sandwich   "],["732007","Grab & Go","Bars","Unmapped","Brownie Chocolate Bar    ","Brownie Chocolate Bar    "],["732008","Grab & Go","Bars","Unmapped","Date Biscuit Bar         ","Date Biscuit Bar         "],["732009","Grab & Go","Bars","Unmapped","Multigrain Nuts Bar      ","Multigrain Nuts Bar      "],["734027","Grab & Go","Bars","Unmapped","Salt. Caramel Protein Bar","Salt. Caramel Protein Bar"],["734029","Grab & Go","Bars","Unmapped","Choco. Penut Protein Bar ","Choco. Penut Protein Bar "],["732016","Grab & Go","Bite Box","Unmapped","Chocolate Pretzel Box    ","Chocolate Pretzel Box    "],["732018","Grab & Go","Bite Box","Unmapped","Biscotti Box             ","Biscotti Box             "],["732020","Grab & Go","Bite Box","Unmapped","Florentine Chocolate Box ","Florentine Chocolate Box "],["751001","Merchandise","Tea","Unmapped","Eng Breakfast T 24 Sachet","Eng Breakfast T 24 Sachet"],["751002","Merchandise","Tea","Unmapped","Eng Breakfast Loose T 00G","Eng Breakfast Loose T 00G"],["751003","Merchandise","Tea","Unmapped","Eng Breakfast Loose T 50G","Eng Breakfast Loose T 50G"],["742016","Merchandise","Blends","Unmapped","House Blend 227G         ","House Blend 227G         "],["742019","Merchandise","Blends","Unmapped","Arabian Mocha Java 227G  ","Arabian Mocha Java 227G  "],["742031","Merchandise","Blends","Unmapped","Breakfast Blend 250gm    ","Breakfast Blend 250gm    "],["742032","Merchandise","Blends","Unmapped","Sunset Blend 250gm       ","Sunset Blend 250gm       "],["742033","Merchandise","Blends","Unmapped","Arabian Mocha Java 250gm ","Arabian Mocha Java 250gm "],["742034","Merchandise","Blends","Unmapped","House Blend 250gm        ","House Blend 250gm        "],["744031","Merchandise","Brew In The Bag     ","Unmapped","Brew Bag Colombian 20gm  ","Brew Bag Colombian 20gm  "],["744034","Merchandise","Brew In The Bag     ","Unmapped","Brew Bag Gutmla APCA 20gm","Brew Bag Gutmla APCA 20gm"],["744035","Merchandise","Brew In The Bag     ","Unmapped","Brew Bag Oromia 20gm     ","Brew Bag Oromia 20gm     "],["744036","Merchandise","Brew In The Bag     ","Unmapped","BrewBagAfricanMagic 20gm ","BrewBagAfricanMagic 20gm "],["744037","Merchandise","Brew In The Bag     ","Unmapped","BrewBag House Blend 20gm ","BrewBag House Blend 20gm "],["724084","Food","Sandwich","Unmapped","Brioche Egg & Cheese     ","Brioche Egg & Cheese     "],["724085","Food","Sandwich","Unmapped","Chicken Mozzarella       ","Chicken Mozzarella       "],["724096","Food","Sandwich","Unmapped","Brioche Scrambled Egg    ","Brioche Scrambled Egg    "],["724109","Food","Sandwich","Unmapped","Brioche Mortadella Cheese","Brioche Mortadella Cheese"],["721085","Food","Cake","Unmapped","Golden Pumpkin Luxe Cake ","Golden Pumpkin Luxe Cake "],["723051","Food","Cake","Unmapped","Swiss-Layered Cake Slice ","Swiss-Layered Cake Slice "],["723052","Food","Cake","Unmapped","Honey Cake Slice         ","Honey Cake Slice         "],["723053","Food","Cake","Unmapped","Peanut Butter Stack Slice","Peanut Butter Stack Slice"],["723054","Food","Cake","Unmapped","Black Forest Rectangular ","Black Forest Rectangular "],["723055","Food","Cake","Unmapped","Red Velvet Cake          ","Red Velvet Cake          "],["723077","Food","Cake","Unmapped","Sundae Brownie           ","Sundae Brownie           "],["721092","Food","Cake","Unmapped","San Sebastian Cheesecake ","San Sebastian Cheesecake "],["723058","Food","Cake","Unmapped","Strawberry Cheesecake    ","Strawberry Cheesecake    "],["723059","Food","Cake","Unmapped","Lotus Cheesecake         ","Lotus Cheesecake         "],["723060","Food","Cake","Unmapped","Baked BlueberryCheesecake","Baked BlueberryCheesecake"],["723061","Food","Cake","Unmapped","Individual Tiramisu      ","Individual Tiramisu      "],["723062","Food","Cake","Unmapped","Tiramisu Jar             ","Tiramisu Jar             "],["723074","Food","Cake","Unmapped","Blueberry Cheesecake     ","Blueberry Cheesecake     "],["723075","Food","Cake","Unmapped","StrawberryCheesecakeslice","StrawberryCheesecakeslice"],["723081","Food","Cake","Unmapped","Madrid Cheesecake        ","Madrid Cheesecake        "],["732010","Grab & Go","Chocolates","Unmapped","Rice Crisp&Hzlnut Choc30G","Rice Crisp&Hzlnut Choc30G"],["732011","Grab & Go","Chocolates","Unmapped","Milk Choc WithHazelnut35G","Milk Choc WithHazelnut35G"],["732012","Grab & Go","Chocolates","Unmapped","Plain Milk Chocolate 40G ","Plain Milk Chocolate 40G "],["733021","Grab & Go","Chocolates","Unmapped","Classic Chocolate Stick  ","Classic Chocolate Stick  "],["721018","Food","Muffin","Unmapped","Vanilla Muffin           ","Vanilla Muffin           "],["721019","Food","Muffin","Unmapped","Strawberry Muffin        ","Strawberry Muffin        "],["721020","Food","Muffin","Unmapped","Blueberry Muffin         ","Blueberry Muffin         "],["721021","Food","Muffin","Unmapped","Mocha Delight Muffin     ","Mocha Delight Muffin     "],["721022","Food","Muffin","Unmapped","Double Chocolate Muffin  ","Double Chocolate Muffin  "],["721023","Food","Muffin","Unmapped","Chocolate Marble Muffin  ","Chocolate Marble Muffin  "],["721071","Food","Muffin","Unmapped","Dat Mufin Pecn Satd Carml","Dat Mufin Pecn Satd Carml"],["721090","Food","Muffin","Unmapped","Low-Fat Blueberry Muffin ","Low-Fat Blueberry Muffin "],["741008","Merchandise","Private Blend","Unmapped","Brazil Jaguar 200 G      ","Brazil Jaguar 200 G      "],["741009","Merchandise","Private Blend","Unmapped","Guatemala APCA 200 G     ","Guatemala APCA 200 G     "],["746058","Merchandise","Private Blend","Unmapped","Guatemala APCA 227G      ","Guatemala APCA 227G      "],["746067","Merchandise","Private Blend","Unmapped","Brazil Jaguar 250gm      ","Brazil Jaguar 250gm      "],["746071","Merchandise","Private Blend","Unmapped","Guatemala APCA 250gm     ","Guatemala APCA 250gm     "],["755141","Merchandise","Jar","Unmapped","Multipurpose Ceramic Jar ","Multipurpose Ceramic Jar "],["755142","Merchandise","Filter","Unmapped","VV Cone Filter           ","VV Cone Filter           "],["712128","Beverages","Cold","Tall","Classic Cold Brew (T)    ","Classic Cold Brew (T)    "],["712129","Beverages","Cold","Grande","Classic Cold Brew (G)    ","Classic Cold Brew (G)    "],["712130","Beverages","Cold","Jumbo","Classic Cold Brew (J)    ","Classic Cold Brew (J)    "],["712134","Manual Brew","Cold","Manual Brew","Iced VV Drip             ","Iced VV Drip             "],["712212","Booster","Cold","Booster","Cold Brew (T) Every Fri 5","Cold Brew (T) Every Fri 5"],["712213","Booster","Cold","Booster","Cold Brew (G) Every Fri 7","Cold Brew (G) Every Fri 7"],["712214","Booster","Cold","Booster","Cold Brew (J) Every Fri 9","Cold Brew (J) Every Fri 9"],["712218","Beverages","Cold","8 OZ","Classic Cold Brew 8Oz    ","Classic Cold Brew 8Oz    "],["712219","Beverages","Cold","Jumbo","Classic Cold Brew 32 Oz  ","Classic Cold Brew 32 Oz  "],["712220","Manual Brew","Cold","Manual Brew","Nitro Cold Brew 8 Oz     ","Nitro Cold Brew 8 Oz     "],["712259","Beverages","Cold","Tall","Mont Blanc (T)           ","Mont Blanc (T)           "],["712260","Beverages","Cold","Grande","Mont Blanc (G)           ","Mont Blanc (G)           "],["712261","Beverages","Cold","Jumbo","Mont Blanc (J)           ","Mont Blanc (J)           "],["712266","Beverages","Cold","Tall","Ube Cake Cold Brew (T)   ","Ube Cake Cold Brew (T)   "],["712267","Beverages","Cold","Grande","Ube Cake Cold Brew (G)   ","Ube Cake Cold Brew (G)   "],["712268","Beverages","Cold","Jumbo","Ube Cake Cold Brew (J)   ","Ube Cake Cold Brew (J)   "],["713018","Beverages","Cold","Tall","Ruby Foam Cold Brew T    ","Ruby Foam Cold Brew T    "],["713020","Beverages","Cold","Jumbo","Ruby Foam Cold Brew J    ","Ruby Foam Cold Brew J    "],["713006","Manual Brew","Cold","Manual Brew","Nitro Infused 16 Oz      ","Nitro Infused 16 Oz      "],["713007","Beverages","Cold","Grande","Classic Cold Brew 16 Oz  ","Classic Cold Brew 16 Oz  "],["713008","Manual Brew","Cold","Manual Brew","Slow Drip 6 Oz           ","Slow Drip 6 Oz           "],["712072","Beverages","Cold","Tall","Blueberry Tonic T        ","Blueberry Tonic T        "],["712073","Beverages","Cold","Grande","Blueberry Tonic G        ","Blueberry Tonic G        "],["712074","Beverages","Cold","Jumbo","Blueberry Tonic J        ","Blueberry Tonic J        "],["712075","Beverages","Cold","Tall","Strawberry Tonic T       ","Strawberry Tonic T       "],["712076","Beverages","Cold","Grande","Strawberry Tonic G       ","Strawberry Tonic G       "],["712077","Beverages","Cold","Jumbo","Strawberry Tonic J       ","Strawberry Tonic J       "],["712078","Beverages","Cold","Tall","Raspberry Tonic T        ","Raspberry Tonic T        "],["712079","Beverages","Cold","Grande","Raspberry Tonic G        ","Raspberry Tonic G        "],["712080","Beverages","Cold","Jumbo","Raspberry Tonic J        ","Raspberry Tonic J        "],["712081","Beverages","Cold","Tall","Mixed Berry Tonic T      ","Mixed Berry Tonic T      "],["712082","Beverages","Cold","Grande","Mixed Berry Tonic G      ","Mixed Berry Tonic G      "],["712083","Beverages","Cold","Jumbo","Mixed Berry Tonic J      ","Mixed Berry Tonic J      "],["712084","Beverages","Cold","Tall","Passion Fruit Tonic T    ","Passion Fruit Tonic T    "],["712085","Beverages","Cold","Grande","Passion Fruit Tonic G    ","Passion Fruit Tonic G    "],["712086","Beverages","Cold","Jumbo","Passion Fruit Tonic J    ","Passion Fruit Tonic J    "],["712087","Beverages","Cold","Tall","Lemon Tonic T            ","Lemon Tonic T            "],["712088","Beverages","Cold","Grande","Lemon Tonic G            ","Lemon Tonic G            "],["712089","Beverages","Cold","Jumbo","Lemon Tonic J            ","Lemon Tonic J            "],["712143","Beverages","Cold","Tall","Strawberry Lemonade (T)  ","Strawberry Lemonade (T)  "],["712144","Beverages","Cold","Grande","Strawberry Lemonade (G)  ","Strawberry Lemonade (G)  "],["712145","Beverages","Cold","Jumbo","Strawberry Lemonade (J)  ","Strawberry Lemonade (J)  "],["712146","Beverages","Cold","Tall","Blueberry Lemonade (T)   ","Blueberry Lemonade (T)   "],["712147","Beverages","Cold","Grande","Blueberry Lemonade (G)   ","Blueberry Lemonade (G)   "],["712148","Beverages","Cold","Jumbo","Blueberry Lemonade (J)   ","Blueberry Lemonade (J)   "],["712149","Beverages","Cold","Tall","Watermelon Lemonade (T)  ","Watermelon Lemonade (T)  "],["712150","Beverages","Cold","Grande","Watermelon Lemonade (G)  ","Watermelon Lemonade (G)  "],["712151","Beverages","Cold","Jumbo","Watermelon Lemonade (J)  ","Watermelon Lemonade (J)  "],["712178","Beverages","Cold","Tall","Espresso & Tonic T       ","Espresso & Tonic T       "],["712179","Beverages","Cold","Grande","Espresso & Tonic G       ","Espresso & Tonic G       "],["712180","Beverages","Cold","Jumbo","Espresso & Tonic J       ","Espresso & Tonic J       "],["712181","Beverages","Cold","Tall","Brazilian Coconut LemndeT","Brazilian Coconut LemndeT"],["721035","Grab & Go","Cookies","Unmapped","Chocolate Chip Cookie    ","Chocolate Chip Cookie    "],["721036","Grab & Go","Cookies","Unmapped","Ginger Cookie            ","Ginger Cookie            "],["721037","Grab & Go","Cookies","Unmapped","Double Chocolate Cookies ","Double Chocolate Cookies "],["721038","Grab & Go","Cookies","Unmapped","Date & Cinnamon Cookie   ","Date & Cinnamon Cookie   "],["721060","Grab & Go","Cookies","Unmapped","Keto Chocolate Cookies   ","Keto Chocolate Cookies   "],["761009","Grab & Go","Cookies","Unmapped","Baked Chocolate Cookies  ","Baked Chocolate Cookies  "],["761010","Grab & Go","Cookies","Unmapped","Baked Date Cinamon Cokies","Baked Date Cinamon Cokies"],["721009","Food","Crossiant","Unmapped","Plain Croissant          ","Plain Croissant          "],["721010","Food","Crossiant","Unmapped","Cheese Croissant         ","Cheese Croissant         "],["721011","Food","Crossiant","Unmapped","Za'atar Herb Croissant   ","Za'atar Herb Croissant   "],["721015","Food","Crossiant","Unmapped","Mini Chocolate Croissant ","Mini Chocolate Croissant "],["721016","Food","Crossiant","Unmapped","Haloumi Croissant Sdwh   ","Haloumi Croissant Sdwh   "],["721017","Food","Crossiant","Unmapped","Turkey&Cheese Crsnt Sdwh ","Turkey&Cheese Crsnt Sdwh "],["721079","Food","Crossiant","Unmapped","Swiss Pain               ","Swiss Pain               "],["721100","Food","Crossiant","Unmapped","Striped Pain Au Chocolate","Striped Pain Au Chocolate"],["721101","Food","Crossiant","Unmapped","Striped Chocolate Croissa","Striped Chocolate Croissa"],["721007","Food","Cronut","Unmapped","Chocolate Cronut         ","Chocolate Cronut         "],["721008","Food","Cronut","Unmapped","Glazed Cronut            ","Glazed Cronut            "],["721058","Food","Muffin","Unmapped","Red Velvet Cupcake       ","Red Velvet Cupcake       "],["755149","Merchandise","Spoon","Unmapped","SS Spon Clip Rse Gld 18cm","SS Spon Clip Rse Gld 18cm"],["742022","Merchandise","Beans","Unmapped","French Roast 227G        ","French Roast 227G        "],["742027","Merchandise","Beans","Unmapped","Espresso Roast 250gm     ","Espresso Roast 250gm     "],["742028","Merchandise","Beans","Unmapped","Italian Roast 250gm      ","Italian Roast 250gm      "],["746073","Merchandise","Beans","Unmapped","French Roast 250 Grams   ","French Roast 250 Grams   "],["723091","Grab & Go","Dates","Unmapped","Sukkari Muftal Royal 750 ","Sukkari Muftal Royal 750 "],["723092","Grab & Go","Dates","Unmapped","Sukkari Muftal Prem 750  ","Sukkari Muftal Prem 750  "],["723093","Grab & Go","Dates","Unmapped","Sukkari Rutub Galaxy 750 ","Sukkari Rutub Galaxy 750 "],["732025","Grab & Go","Dates","Unmapped","Filled Date Box 3Pcs     ","Filled Date Box 3Pcs     "],["732026","Grab & Go","Dates","Unmapped","Filled Date Box 7Pcs     ","Filled Date Box 7Pcs     "],["742023","Merchandise","Beans","Unmapped","Decaf Espresso 227G      ","Decaf Espresso 227G      "],["742025","Merchandise","Beans","Unmapped","Decaf Colombia Suprem 250","Decaf Colombia Suprem 250"],["742026","Merchandise","Beans","Unmapped","Decaf Espreso Roast 250gm","Decaf Espreso Roast 250gm"],["721001","Food","Donut","Unmapped","Chocolate Round Donut    ","Chocolate Round Donut    "],["721002","Food","Donut","Unmapped","Glazed Round Donut       ","Glazed Round Donut       "],["721003","Food","Donut","Unmapped","Red Velvet Donut         ","Red Velvet Donut         "],["721004","Food","Donut","Unmapped","Keto Donut               ","Keto Donut               "],["721005","Food","Donut","Unmapped","Keto Pistachio Donut     ","Keto Pistachio Donut     "],["721006","Food","Donut","Unmapped","Cinnamon Roll Donut      ","Cinnamon Roll Donut      "],["721081","Food","Donut","Unmapped","Long Chocolate Donut     ","Long Chocolate Donut     "],["721082","Food","Donut","Unmapped","Long Glazed Donut        ","Long Glazed Donut        "],["721087","Food","Donut","Unmapped","Cinnamon & Pecan Donut   ","Cinnamon & Pecan Donut   "],["723090","Food","Donut","Unmapped","Choco Sprinkled Donut    ","Choco Sprinkled Donut    "],["711001","Beverages","Hot","Short","Coffee of the day S      ","Coffee of the day S      "],["711002","Beverages","Hot","Tall","Coffee of the day T      ","Coffee of the day T      "],["711003","Beverages","Hot","Grande","Coffee of the day G      ","Coffee of the day G      "],["711004","Beverages","Hot","Jumbo","Coffee of the day J      ","Coffee of the day J      "],["711006","Beverages","Hot","Tall","Decaf Coffee of the Day T","Decaf Coffee of the Day T"],["711007","Beverages","Hot","Grande","Decaf Coffee of the Day G","Decaf Coffee of the Day G"],["711009","Beverages","Hot","Short","Misto S                  ","Misto S                  "],["711010","Beverages","Hot","Tall","Misto T                  ","Misto T                  "],["711011","Beverages","Hot","Grande","Misto G                  ","Misto G                  "],["711012","Beverages","Hot","Jumbo","Misto J                  ","Misto J                  "],["711130","Beverages","Hot","Tall","Fresh COD Refill T       ","Fresh COD Refill T       "],["711131","Beverages","Hot","Grande","Fresh COD Refill G       ","Fresh COD Refill G       "],["711132","Beverages","Hot","Jumbo","Fresh COD Refill J       ","Fresh COD Refill J       "],["711162","Beverages","Hot","Short","Mild Coffee Of The Day S ","Mild Coffee Of The Day S "],["711163","Beverages","Hot","Tall","Mild Coffee Of The Day T ","Mild Coffee Of The Day T "],["711164","Beverages","Hot","Grande","Mild Coffee Of The Day G ","Mild Coffee Of The Day G "],["711165","Beverages","Hot","Jumbo","Mild Coffee Of The Day J ","Mild Coffee Of The Day J "],["711173","Beverages","Hot","Tall","Mild Cofee Evry Mon SAR 5","Mild Cofee Evry Mon SAR 5"],["711175","Beverages","Joe Box - 2 Pc","21 Oz","Coffee Box 21 Oz Mild    ","Coffee Box 21 Oz Mild    "],["711176","Beverages","Joe Box - 2 Pc","21 Oz","Coffee Box 21 Oz Classic ","Coffee Box 21 Oz Classic "],["711177","Beverages","Joe Box - 8 Pc","70 Oz","Coffee Box 70 Oz Mild    ","Coffee Box 70 Oz Mild    "],["711178","Beverages","Joe Box - 8 Pc","70 Oz","Coffee Box 70 Oz Classic ","Coffee Box 70 Oz Classic "],["711179","Beverages","Joe Box - 16 Pc","190 Oz","Coffee Box 190 Oz Mild   ","Coffee Box 190 Oz Mild   "],["711180","Beverages","Joe Box - 16 Pc","190 Oz","Coffee Box 190 Oz Classic","Coffee Box 190 Oz Classic"],["711193","Manual Brew","Hot","Manual Brew","VV COD Mild (S)          ","VV COD Mild (S)          "],["711194","Manual Brew","Hot","Manual Brew","VV COD Mild (T)          ","VV COD Mild (T)          "],["711195","Manual Brew","Hot","Manual Brew","VV COD Mild (G)          ","VV COD Mild (G)          "],["711196","Manual Brew","Hot","Manual Brew","VV COD Mild (J)          ","VV COD Mild (J)          "],["711197","Manual Brew","Hot","Manual Brew","VV COD Classic (S)       ","VV COD Classic (S)       "],["711198","Manual Brew","Hot","Manual Brew","VV COD Classic (T)       ","VV COD Classic (T)       "],["711199","Manual Brew","Hot","Manual Brew","VV COD Classic (G)       ","VV COD Classic (G)       "],["711200","Manual Brew","Hot","Manual Brew","VV COD Classic (J)       ","VV COD Classic (J)       "],["746049","Grab & Go","Drip Packet","Unmapped","Ethiopia Oromia 12 Gram  ","Ethiopia Oromia 12 Gram  "],["746050","Grab & Go","Drip Packet","Unmapped","Colombian Samboni 12 Gram","Colombian Samboni 12 Gram"],["746051","Grab & Go","Drip Packet","Unmapped","Guatemala APCA 12 Gram   ","Guatemala APCA 12 Gram   "],["746052","Grab & Go","Drip Packet","Unmapped","House Blend AU 12 Gram   ","House Blend AU 12 Gram   "],["746054","Merchandise","Drip Packet","Unmapped","Drip Packet OromiaBox10pc","Drip Packet OromiaBox10pc"],["746064","Merchandise","Drip Packet","Unmapped","DripPacketGuatemlaBox10pc","DripPacketGuatemlaBox10pc"],["746066","Merchandise","Drip Packet","Unmapped","DripPacketYirgchefBox10pc","DripPacketYirgchefBox10pc"],["749043","Merchandise","Drip Packet","Unmapped","Ethiopia Yirgachef 8Sacht","Ethiopia Yirgachef 8Sacht"],["749044","Merchandise","Drip Packet","Unmapped","Ethiopia Yirgachefe 12gm ","Ethiopia Yirgachefe 12gm "],["724065","Food","Sandwich","Unmapped","Sunny Side Sandwich      ","Sunny Side Sandwich      "],["724066","Food","Sandwich","Unmapped","Classic Egg & Cheese Sdwh","Classic Egg & Cheese Sdwh"],["724067","Food","Sandwich","Unmapped","Turkey & Cheese Sandwich ","Turkey & Cheese Sandwich "],["711017","Beverages","Hot","4 oz","Espresso Single          ","Espresso Single          "],["711018","Beverages","Hot","4 oz","Espresso Double          ","Espresso Double          "],["711019","Beverages","Hot","7 oz","Espresso Triple          ","Espresso Triple          "],["711020","Beverages","Hot","4 oz","Espresso Hybrid          ","Espresso Hybrid          "],["711021","Beverages","Hot","4 oz","Espresso Macchiato SL    ","Espresso Macchiato SL    "],["711022","Beverages","Hot","7 oz","Espresso Macchiato DL    ","Espresso Macchiato DL    "],["711023","Beverages","Hot","7 oz","Espresso Macchiato TL    ","Espresso Macchiato TL    "],["711024","Hybrid","Hot","4 oz","Espresso Macchiato HB    ","Espresso Macchiato HB    "],["711025","Beverages","Hot","4 oz","Espresso Con Pana SL     ","Espresso Con Pana SL     "],["711026","Beverages","Hot","7 oz","Espresso Con Pana DL     ","Espresso Con Pana DL     "],["711027","Beverages","Hot","7 oz","Espresso Con Pana TL     ","Espresso Con Pana TL     "],["711166","Beverages","Hot","7 oz","Espresso QUAD            ","Espresso QUAD            "],["711167","Beverages","Hot","7 oz","Espresso Macchiato QUAD  ","Espresso Macchiato QUAD  "],["711168","Beverages","Hot","7 oz","Espresso Con Pana QUAD   ","Espresso Con Pana QUAD   "],["711032","Beverages","Hot","Short","Espresso Americano S     ","Espresso Americano S     "],["711033","Beverages","Hot","Tall","Espresso Americano T     ","Espresso Americano T     "],["711034","Beverages","Hot","Grande","Espresso Americano G     ","Espresso Americano G     "],["711035","Beverages","Hot","Jumbo","Espresso Americano J     ","Espresso Americano J     "],["711036","Hybrid","Hot","Short","Espresso Americano HB    ","Espresso Americano HB    "],["711037","Beverages","Hot","4 oz","Cortado 4 Oz Regular     ","Cortado 4 Oz Regular     "],["711038","Hybrid","Hot","4 oz","Cortado 4 Oz HB          ","Cortado 4 Oz HB          "],["711039","Beverages","Hot","Short","Flat White 6 Oz Regular  ","Flat White 6 Oz Regular  "],["711040","Hybrid","Hot","Short","Flat White 8 Oz HB       ","Flat White 8 Oz HB       "],["711041","Beverages","Hot","Short","Cappuccino S             ","Cappuccino S             "],["711042","Beverages","Hot","Tall","Cappuccino T             ","Cappuccino T             "],["711043","Beverages","Hot","Grande","Cappuccino G             ","Cappuccino G             "],["711044","Beverages","Hot","Jumbo","Cappuccino J             ","Cappuccino J             "],["711045","Hybrid","Hot","Short","Cappuccino HB            ","Cappuccino HB            "],["711046","Manual Brew","Hot","Manual Brew","Spiced Pumpkin Latte Regl","Spiced Pumpkin Latte Regl"],["711047","Hybrid","Hot","Short","Spiced Pumpkin Latte HB  ","Spiced Pumpkin Latte HB  "],["711048","Beverages","Hot","Short","Coffee Latte S           ","Coffee Latte S           "],["711049","Beverages","Hot","Tall","Coffee Latte T           ","Coffee Latte T           "],["711050","Beverages","Hot","Grande","Coffee Latte G           ","Coffee Latte G           "],["711051","Beverages","Hot","Jumbo","Coffee Latte J           ","Coffee Latte J           "],["711052","Hybrid","Hot","Short","Coffee Latte HB          ","Coffee Latte HB          "],["711053","Beverages","Hot","Short","Spanish Latte S          ","Spanish Latte S          "],["711054","Beverages","Hot","Tall","Spanish Latte T          ","Spanish Latte T          "],["711055","Beverages","Hot","Grande","Spanish Latte G          ","Spanish Latte G          "],["711056","Beverages","Hot","Jumbo","Spanish Latte J          ","Spanish Latte J          "],["711057","Hybrid","Hot","Short","Spanish Latte HB         ","Spanish Latte HB         "],["711058","Beverages","Hot","Short","Caramel Macchiato Latte S","Caramel Macchiato Latte S"],["711059","Beverages","Hot","Tall","Caramel Macchiato Latte T","Caramel Macchiato Latte T"],["711060","Beverages","Hot","Grande","Caramel Macchiato Latte G","Caramel Macchiato Latte G"],["711061","Beverages","Hot","Jumbo","Caramel Macchiato Latte J","Caramel Macchiato Latte J"],["711062","Hybrid","Hot","Short","Caramel Macchiato LatteHB","Caramel Macchiato LatteHB"],["711063","Beverages","Hot","Short","White Coffee Mocha S     ","White Coffee Mocha S     "],["711064","Beverages","Hot","Tall","White Coffee Mocha T     ","White Coffee Mocha T     "],["711065","Beverages","Hot","Grande","White Coffee Mocha G     ","White Coffee Mocha G     "],["711066","Beverages","Hot","Jumbo","White Coffee Mocha J     ","White Coffee Mocha J     "],["711067","Hybrid","Hot","Short","White Coffee Mocha HB    ","White Coffee Mocha HB    "],["711068","Beverages","Hot","Short","Coffee Mocha S           ","Coffee Mocha S           "],["711069","Beverages","Hot","Tall","Coffee Mocha T           ","Coffee Mocha T           "],["711070","Beverages","Hot","Grande","Coffee Mocha G           ","Coffee Mocha G           "],["711071","Beverages","Hot","Jumbo","Coffee Mocha J           ","Coffee Mocha J           "],["711072","Hybrid","Hot","Short","Coffee Mocha HB          ","Coffee Mocha HB          "],["711134","Beverages","Hot","Tall","Nutella Hot Mocha T      ","Nutella Hot Mocha T      "],["711137","Beverages","Hot","Short","Ginger Coffee Latte S    ","Ginger Coffee Latte S    "],["711138","Beverages","Hot","Tall","Ginger Coffee Latte T    ","Ginger Coffee Latte T    "],["711139","Beverages","Hot","Grande","Ginger Coffee Latte G    ","Ginger Coffee Latte G    "],["711140","Beverages","Hot","Jumbo","Ginger Coffee Latte J    ","Ginger Coffee Latte J    "],["711141","Beverages","Hot","Short","Flat Brown 6 Oz          ","Flat Brown 6 Oz          "],["711142","Beverages","Hot","Short","Caramel Coffee Mocha S   ","Caramel Coffee Mocha S   "],["711143","Beverages","Hot","Tall","Caramel Coffee Mocha T   ","Caramel Coffee Mocha T   "],["711144","Beverages","Hot","Grande","Caramel Coffee Mocha G   ","Caramel Coffee Mocha G   "],["711155","Beverages","Hot","Tall","Raspberry Mocha T        ","Raspberry Mocha T        "],["711156","Beverages","Hot","Grande","Raspberry Mocha G        ","Raspberry Mocha G        "],["711174","Booster","Hot","Booster","Cappucino Evry Wed SAR 7 ","Cappucino Evry Wed SAR 7 "],["711189","Beverages","Hot","Short","Spanish Ginger Latte (S) ","Spanish Ginger Latte (S) "],["711190","Beverages","Hot","Tall","Spanish Ginger Latte (T) ","Spanish Ginger Latte (T) "],["711191","Beverages","Hot","Grande","Spanish Ginger Latte (G) ","Spanish Ginger Latte (G) "],["711192","Beverages","Hot","Jumbo","Spanish Ginger Latte (J) ","Spanish Ginger Latte (J) "],["711206","Beverages","Hot","Tall","Ginger Spice Mocha (T)   ","Ginger Spice Mocha (T)   "],["711207","Beverages","Hot","Grande","Ginger Spice Mocha (G)   ","Ginger Spice Mocha (G)   "],["711208","Beverages","Hot","Jumbo","Ginger Spice Mocha (J)   ","Ginger Spice Mocha (J)   "],["711214","Beverages","Hot","Short","Toffee Nut Latte (S)     ","Toffee Nut Latte (S)     "],["711215","Beverages","Hot","Tall","Toffee Nut Latte (T)     ","Toffee Nut Latte (T)     "],["711216","Beverages","Hot","Grande","Toffee Nut Latte (G)     ","Toffee Nut Latte (G)     "],["711217","Beverages","Hot","Jumbo","Toffee Nut Latte (J)     ","Toffee Nut Latte (J)     "],["711219","Beverages","Hot","Tall","Toffee Nut Mocha (T)     ","Toffee Nut Mocha (T)     "],["711220","Beverages","Hot","Grande","Toffee Nut Mocha (G)     ","Toffee Nut Mocha (G)     "],["711221","Beverages","Hot","Jumbo","Toffee Nut Mocha (J)     ","Toffee Nut Mocha (J)     "],["746070","Merchandise","Private Blend","Unmapped","African Magic 250gm      ","African Magic 250gm      "],["712016","Beverages","Cold","Tall","Strawberry Franilla T    ","Strawberry Franilla T    "],["712017","Beverages","Cold","Grande","Strawberry Franilla G    ","Strawberry Franilla G    "],["712018","Beverages","Cold","Jumbo","Strawberry Franilla J    ","Strawberry Franilla J    "],["712022","Beverages","Cold","Tall","Lotus Franilla T         ","Lotus Franilla T         "],["712023","Beverages","Cold","Grande","Lotus Franilla G         ","Lotus Franilla G         "],["712024","Beverages","Cold","Jumbo","Lotus Franilla J         ","Lotus Franilla J         "],["712025","Beverages","Cold","Tall","Chocolate Franilla T     ","Chocolate Franilla T     "],["712026","Beverages","Cold","Grande","Chocolate Franilla G     ","Chocolate Franilla G     "],["712027","Beverages","Cold","Jumbo","Chocolate Franilla J     ","Chocolate Franilla J     "],["712028","Beverages","Cold","Tall","Caramel Franilla T       ","Caramel Franilla T       "],["712029","Beverages","Cold","Grande","Caramel Franilla G       ","Caramel Franilla G       "],["712030","Beverages","Cold","Jumbo","Caramel Franilla J       ","Caramel Franilla J       "],["712031","Beverages","Cold","Tall","Light Franilla T         ","Light Franilla T         "],["712032","Beverages","Cold","Grande","Light Franilla G         ","Light Franilla G         "],["712033","Beverages","Cold","Jumbo","Light Franilla J         ","Light Franilla J         "],["712100","Beverages","Cold","Tall","Affogato Franilla T      ","Affogato Franilla T      "],["712101","Beverages","Cold","Grande","Affogato Franilla G      ","Affogato Franilla G      "],["712102","Beverages","Cold","Jumbo","Affogato Franilla J      ","Affogato Franilla J      "],["712106","Beverages","Cold","Tall","Wtermelon Franilla T     ","Wtermelon Franilla T     "],["712107","Beverages","Cold","Grande","Wtermelon Franilla G     ","Wtermelon Franilla G     "],["712108","Beverages","Cold","Jumbo","Wtermelon Franilla J     ","Wtermelon Franilla J     "],["712152","Beverages","Cold","Tall","Pink Franilla (T)        ","Pink Franilla (T)        "],["712207","Beverages","Cold","Tall","Matcha Franilla (T)      ","Matcha Franilla (T)      "],["712253","Beverages","Cold","Tall","Ube Franilla (T)         ","Ube Franilla (T)         "],["712254","Beverages","Cold","Grande","Ube Franilla (G)         ","Ube Franilla (G)         "],["712255","Beverages","Cold","Jumbo","Ube Franilla (J)         ","Ube Franilla (J)         "],["712001","Beverages","Cold","Tall","Mocha Frappe T           ","Mocha Frappe T           "],["712002","Beverages","Cold","Grande","Mocha Frappe G           ","Mocha Frappe G           "],["712003","Beverages","Cold","Jumbo","Mocha Frappe J           ","Mocha Frappe J           "],["712004","Beverages","Cold","Tall","Caramel Frappe T         ","Caramel Frappe T         "],["712005","Beverages","Cold","Grande","Caramel Frappe G         ","Caramel Frappe G         "],["712006","Beverages","Cold","Jumbo","Caramel Frappe J         ","Caramel Frappe J         "],["712007","Beverages","Cold","Tall","Cookie Frappe T          ","Cookie Frappe T          "],["712008","Beverages","Cold","Grande","Cookie Frappe G          ","Cookie Frappe G          "],["712009","Beverages","Cold","Jumbo","Cookie Frappe J          ","Cookie Frappe J          "],["712010","Beverages","Cold","Tall","Espresso Frappe T        ","Espresso Frappe T        "],["712011","Beverages","Cold","Grande","Espresso Frappe G        ","Espresso Frappe G        "],["712012","Beverages","Cold","Jumbo","Espresso Frappe J        ","Espresso Frappe J        "],["712013","Beverages","Cold","Tall","Coffee Frappe T          ","Coffee Frappe T          "],["712014","Beverages","Cold","Grande","Coffee Frappe G          ","Coffee Frappe G          "],["712015","Beverages","Cold","Jumbo","Coffee Frappe J          ","Coffee Frappe J          "],["712138","Beverages","Cold","Grande","Caramel Crunch Frappe (G)","Caramel Crunch Frappe (G)"],["712139","Beverages","Cold","Jumbo","Caramel Crunch Frappe (J)","Caramel Crunch Frappe (J)"],["712211","Booster","Cold","Booster","Crml Frappe Evry Mon 11  ","Crml Frappe Evry Mon 11  "],["712225","Beverages","Cold","Tall","Spiced Pumpkin Frappe (T)","Spiced Pumpkin Frappe (T)"],["712226","Beverages","Cold","Grande","Spiced Pumpkin Frappe (G)","Spiced Pumpkin Frappe (G)"],["712227","Beverages","Cold","Jumbo","Spiced Pumpkin Frappe (J)","Spiced Pumpkin Frappe (J)"],["721033","Food","Pastry","Unmapped","Canele Pistachio         ","Canele Pistachio         "],["721053","Food","Pastry","Unmapped","Chocolate Mille Feuille  ","Chocolate Mille Feuille  "],["722041","Food","Salad","Unmapped","Watermelon &Berries Fruit","Watermelon &Berries Fruit"],["722045","Food","Salad","Unmapped","Mixed Berries Salad      ","Mixed Berries Salad      "],["723082","Food","Salad","Unmapped","Beets & Notes Salad      ","Beets & Notes Salad      "],["723083","Food","Salad","Unmapped","High Protein Salad       ","High Protein Salad       "],["723084","Food","Salad","Unmapped","Najdia Salad             ","Najdia Salad             "],["712097","Juice","Juice","Unmapped","Orange 250 ML            ","Orange 250 ML            "],["712234","Juice","Juice","Unmapped","Pure Orange Squeeze      ","Pure Orange Squeeze      "],["741003","Merchandise","Private Blend","Unmapped","Ethiopian Oromia 200G    ","Ethiopian Oromia 200G    "],["741004","Merchandise","Private Blend","Unmapped","The Original 200 Grams   ","The Original 200 Grams   "],["741011","Merchandise","Private Blend","Unmapped","El Salvador Carlos 200G  ","El Salvador Carlos 200G  "],["741012","Merchandise","Private Blend","Unmapped","El Salvador Carlos 250G  ","El Salvador Carlos 250G  "],["746068","Merchandise","Private Blend","Unmapped","Ethiopia Oromia 250gm    ","Ethiopia Oromia 250gm    "],["746069","Merchandise","Private Blend","Unmapped","The Original 250gm       ","The Original 250gm       "],["746072","Merchandise","Private Blend","Unmapped","Ethiopia Guji 250gm      ","Ethiopia Guji 250gm      "],["749022","Merchandise","Private Blend","Unmapped","The Original 227 Grams   ","The Original 227 Grams   "],["725101","Gelato","Gelato","Unmapped","Vanilla Gelato           ","Vanilla Gelato           "],["725102","Gelato","Gelato","Unmapped","Vanilla Gelato Strawberry","Vanilla Gelato Strawberry"],["725103","Gelato","Gelato","Unmapped","Vanilla Gelato Chocolate ","Vanilla Gelato Chocolate "],["725104","Gelato","Gelato","Unmapped","Espresso Affogato        ","Espresso Affogato        "],["725107","Gelato","Gelato","Unmapped","Strawberry Infused Gelato","Strawberry Infused Gelato"],["725115","Food","Pastry","Unmapped","Salted Caramel Sundae    ","Salted Caramel Sundae    "],["725116","Gelato","Gelato","Unmapped","Matcha Affogato          ","Matcha Affogato          "],["725117","Gelato","Gelato","Unmapped","Hazelnut Chocolate Gelato","Hazelnut Chocolate Gelato"],["721040","Grab & Go","Biscotti","Unmapped","Biscotti 9 Grams         ","Biscotti 9 Grams         "],["723056","Grab & Go","Cake","Unmapped","Marble English Cake      ","Marble English Cake      "],["723057","Grab & Go","Cake","Unmapped","Blueberry English Cake   ","Blueberry English Cake   "],["723076","Grab & Go","Cake","Unmapped","Pumpkin English Cake     ","Pumpkin English Cake     "],["724099","Grab & Go","Cake","Unmapped","Dates Cake Mini          ","Dates Cake Mini          "],["722049","Food","Salad","Unmapped","Yoghurt Blueberry Granola","Yoghurt Blueberry Granola"],["751004","Merchandise","Tea","Unmapped","Organic GN T Box 24Sachet","Organic GN T Box 24Sachet"],["751005","Merchandise","Tea","Unmapped","Organic GN Loose T 100G  ","Organic GN Loose T 100G  "],["751006","Merchandise","Tea","Unmapped","Organic GN Loose T 50G   ","Organic GN Loose T 50G   "],["751007","Merchandise","Tea","Unmapped","Earl Gray T Box 24 Sachet","Earl Gray T Box 24 Sachet"],["751008","Merchandise","Tea","Unmapped","Earl Gray Loose Tea 100G ","Earl Gray Loose Tea 100G "],["751009","Merchandise","Tea","Unmapped","Earl Gray Loose Tea 50G  ","Earl Gray Loose Tea 50G  "],["751011","Merchandise","Tea","Unmapped","Chamomile Loose Tea 100G ","Chamomile Loose Tea 100G "],["751012","Merchandise","Tea","Unmapped","Chamomile Loose Tea 50G  ","Chamomile Loose Tea 50G  "],["751013","Merchandise","Tea","Unmapped","Jasmine GN T Box 24Sachet","Jasmine GN T Box 24Sachet"],["751014","Merchandise","Tea","Unmapped","Jasmine GN Loose Tea 100G","Jasmine GN Loose Tea 100G"],["751015","Merchandise","Tea","Unmapped","Jasmine GN Loose Tea 50G ","Jasmine GN Loose Tea 50G "],["751016","Merchandise","Tea","Unmapped","Moroco Mint GN T 24Sachet","Moroco Mint GN T 24Sachet"],["751017","Merchandise","Tea","Unmapped","Moroccan Mint GN Ls T100G","Moroccan Mint GN Ls T100G"],["751018","Merchandise","Tea","Unmapped","Moroccan Mint GN Los T50G","Moroccan Mint GN Los T50G"],["713011","Premium","Hot","Short","Americano / Long Premium ","Americano / Long Premium "],["713012","Premium","Hot","4 oz","Cortado Premium          ","Cortado Premium          "],["713013","Premium","Hot","Short","Flat White Premium       ","Flat White Premium       "],["713014","Premium","Hot","Short","Cappuccino Premium       ","Cappuccino Premium       "],["713015","Premium","Hot","Short","Coffee Latte Premium     ","Coffee Latte Premium     "],["712034","Beverages","Cold","Tall","Iced Coffee Americano T  ","Iced Coffee Americano T  "],["712035","Beverages","Cold","Grande","Iced Coffee Americano G  ","Iced Coffee Americano G  "],["712036","Beverages","Cold","Jumbo","Iced Coffee Americano J  ","Iced Coffee Americano J  "],["712037","Beverages","Cold","Tall","Iced Coffee Latte T      ","Iced Coffee Latte T      "],["712038","Beverages","Cold","Grande","Iced Coffee Latte G      ","Iced Coffee Latte G      "],["712039","Beverages","Cold","Jumbo","Iced Coffee Latte J      ","Iced Coffee Latte J      "],["712040","Hybrid","Cold","Tall","Iced Coffee Latte HB     ","Iced Coffee Latte HB     "],["712041","Beverages","Cold","Tall","Iced Spanish Latte T     ","Iced Spanish Latte T     "],["712042","Beverages","Cold","Grande","Iced Spanish Latte G     ","Iced Spanish Latte G     "],["712043","Beverages","Cold","Jumbo","Iced Spanish Latte J     ","Iced Spanish Latte J     "],["712045","Beverages","Cold","Tall","Iced White Mocha Latte T ","Iced White Mocha Latte T "],["712046","Beverages","Cold","Grande","Iced White Mocha Latte G ","Iced White Mocha Latte G "],["712047","Beverages","Cold","Jumbo","Iced White Mocha Latte J ","Iced White Mocha Latte J "],["712048","Beverages","Cold","Tall","Iced Chocolate T         ","Iced Chocolate T         "],["712049","Beverages","Cold","Grande","Iced Chocolate G         ","Iced Chocolate G         "],["712050","Beverages","Cold","Jumbo","Iced Chocolate J         ","Iced Chocolate J         "],["712051","Beverages","Cold","Tall","Iced Coffee Mocha T      ","Iced Coffee Mocha T      "],["712052","Beverages","Cold","Grande","Iced Coffee Mocha G      ","Iced Coffee Mocha G      "],["712053","Beverages","Cold","Jumbo","Iced Coffee Mocha J      ","Iced Coffee Mocha J      "],["712054","Hybrid","Cold","Tall","Iced Coffee Mocha HB     ","Iced Coffee Mocha HB     "],["712055","Beverages","Cold","Tall","Iced White Mocha Shaken T","Iced White Mocha Shaken T"],["712056","Beverages","Cold","Tall","Double Espresso Shaken T ","Double Espresso Shaken T "],["712109","Beverages","Cold","Tall","Ruby Cream Iced Mocha (T)","Ruby Cream Iced Mocha (T)"],["712110","Beverages","Cold","Grande","Ruby Cream Iced Mocha (G)","Ruby Cream Iced Mocha (G)"],["712111","Beverages","Cold","Jumbo","Ruby Cream Iced Mocha (J)","Ruby Cream Iced Mocha (J)"],["712115","Beverages","Cold","Tall","Iced Honey Latte T       ","Iced Honey Latte T       "],["712116","Beverages","Cold","Tall","Iced Pumpkin Latte (T)   ","Iced Pumpkin Latte (T)   "],["712117","Beverages","Cold","Grande","Iced Pumpkin Latte (G)   ","Iced Pumpkin Latte (G)   "],["712118","Beverages","Cold","Jumbo","Iced Pumpkin Latte (J)   ","Iced Pumpkin Latte (J)   "],["712119","Beverages","Cold","Tall","Iced Mocha Caramel (T)   ","Iced Mocha Caramel (T)   "],["712120","Beverages","Cold","Grande","Iced Mocha Caramel (G)   ","Iced Mocha Caramel (G)   "],["712121","Beverages","Cold","Jumbo","Iced Mocha Caramel (J)   ","Iced Mocha Caramel (J)   "],["712122","Beverages","Cold","Tall","Iced Caramel Latte (T)   ","Iced Caramel Latte (T)   "],["712123","Beverages","Cold","Grande","Iced Caramel Latte (G)   ","Iced Caramel Latte (G)   "],["712124","Beverages","Cold","Jumbo","Iced Caramel Latte (J)   ","Iced Caramel Latte (J)   "],["712125","Beverages","Cold","Tall","Ice Crml Machiato Latte T","Ice Crml Machiato Latte T"],["712126","Beverages","Cold","Grande","Ice Crml Machiato Latte G","Ice Crml Machiato Latte G"],["712127","Beverages","Cold","Jumbo","Ice Crml Machiato Latte J","Ice Crml Machiato Latte J"],["712131","Beverages","Cold","Tall","Cold Milk T              ","Cold Milk T              "],["712132","Beverages","Cold","Grande","Cold Milk G              ","Cold Milk G              "],["712133","Beverages","Cold","Jumbo","Cold Milk J              ","Cold Milk J              "],["712158","Beverages","Cold","Tall","Iced Cappuccino (T)      ","Iced Cappuccino (T)      "],["712159","Beverages","Cold","Grande","Iced Cappuccino (G)      ","Iced Cappuccino (G)      "],["712160","Beverages","Cold","Jumbo","Iced Cappuccino (J)      ","Iced Cappuccino (J)      "],["712161","Beverages","Cold","Tall","Iced Carml Cappuccino (T)","Iced Carml Cappuccino (T)"],["712162","Beverages","Cold","Grande","Iced Carml Cappuccino (G)","Iced Carml Cappuccino (G)"],["712163","Beverages","Cold","Jumbo","Iced Carml Cappuccino (J)","Iced Carml Cappuccino (J)"],["712164","Booster","Cold","Booster","Iced Spansh Evry Thu SAR9","Iced Spansh Evry Thu SAR9"],["712165","Beverages","Hot","Short","Iced Classic COD (S)     ","Iced Classic COD (S)     "],["712166","Beverages","Cold","Tall","Iced Classic COD (T)     ","Iced Classic COD (T)     "],["712167","Beverages","Cold","Grande","Iced Classic COD (G)     ","Iced Classic COD (G)     "],["712168","Beverages","Cold","Jumbo","Iced Classic COD (J)     ","Iced Classic COD (J)     "],["712169","Beverages","Cold","Tall","Iced Karkade Shaken (T)  ","Iced Karkade Shaken (T)  "],["712170","Beverages","Cold","Grande","Iced Karkade Shaken (G)  ","Iced Karkade Shaken (G)  "],["712171","Beverages","Cold","Jumbo","Iced Karkade Shaken (J)  ","Iced Karkade Shaken (J)  "],["712195","Beverages","Cold","Tall","Iced Tiramisu Latte (T)  ","Iced Tiramisu Latte (T)  "],["712196","Beverages","Cold","Grande","Iced Tiramisu Latte (G)  ","Iced Tiramisu Latte (G)  "],["712197","Beverages","Cold","Jumbo","Iced Tiramisu Latte (J)  ","Iced Tiramisu Latte (J)  "],["712198","Beverages","Cold","Tall","Iced Dates Latte (T)     ","Iced Dates Latte (T)     "],["712210","Beverages","Hot","Short","Iced Flat White (S)      ","Iced Flat White (S)      "],["712215","Beverages","Cold","Tall","Iced Aerocano /Freddo (T)","Iced Aerocano /Freddo (T)"],["712217","Beverages","Cold","Tall","Iced Draft Latte (T)     ","Iced Draft Latte (T)     "],["712228","Beverages","Cold","Tall","Spanish Frozito (T)      ","Spanish Frozito (T)      "],["712229","Beverages","Cold","Grande","Spanish Frozito (G)      ","Spanish Frozito (G)      "],["712230","Beverages","Cold","Jumbo","Spanish Frozito (J)      ","Spanish Frozito (J)      "],["712231","Beverages","Cold","Tall","Iced Toffee Nut Latte T  ","Iced Toffee Nut Latte T  "],["712232","Beverages","Cold","Grande","Iced Toffee Nut Latte G  ","Iced Toffee Nut Latte G  "],["712233","Beverages","Cold","Jumbo","Iced Toffee Nut Latte J  ","Iced Toffee Nut Latte J  "],["712244","Beverages","Cold","Tall","Ube Coffee Latte (T)     ","Ube Coffee Latte (T)     "],["712245","Beverages","Cold","Grande","Ube Coffee Latte (G)     ","Ube Coffee Latte (G)     "],["712246","Beverages","Cold","Jumbo","Ube Coffee Latte (J)     ","Ube Coffee Latte (J)     "],["712247","Beverages","Cold","Tall","Ube Cheesecake (T)       ","Ube Cheesecake (T)       "],["712248","Beverages","Cold","Grande","Ube Cheesecake (G)       ","Ube Cheesecake (G)       "],["712249","Beverages","Cold","Jumbo","Ube Cheesecake (J)       ","Ube Cheesecake (J)       "],["712250","Beverages","Cold","Tall","Ube Matcha Cloud (T)     ","Ube Matcha Cloud (T)     "],["712251","Beverages","Cold","Grande","Ube Matcha Cloud (G)     ","Ube Matcha Cloud (G)     "],["712252","Beverages","Cold","Jumbo","Ube Matcha Cloud (J)     ","Ube Matcha Cloud (J)     "],["712262","Beverages","Cold","Tall","Lemon Freddo (T)         ","Lemon Freddo (T)         "],["712263","Beverages","Cold","Tall","Iced Crème Brulee (T)    ","Iced Crème Brulee (T)    "],["712264","Beverages","Cold","Grande","Iced Crème Brulee (G)    ","Iced Crème Brulee (G)    "],["712265","Beverages","Cold","Jumbo","Iced Crème Brulee (J)    ","Iced Crème Brulee (J)    "],["712063","Beverages","Cold","Tall","Iced Tea Lemon T         ","Iced Tea Lemon T         "],["712064","Beverages","Cold","Grande","Iced Tea Lemon G         ","Iced Tea Lemon G         "],["712065","Beverages","Cold","Jumbo","Iced Tea Lemon J         ","Iced Tea Lemon J         "],["712066","Beverages","Cold","Tall","Iced Tea Peach T         ","Iced Tea Peach T         "],["712067","Beverages","Cold","Grande","Iced Tea Peach G         ","Iced Tea Peach G         "],["712068","Beverages","Cold","Jumbo","Iced Tea Peach J         ","Iced Tea Peach J         "],["712069","Beverages","Cold","Tall","Iced Tea Lemon & Peach T ","Iced Tea Lemon & Peach T "],["712070","Beverages","Cold","Grande","Iced Tea Lemon & Peach G ","Iced Tea Lemon & Peach G "],["712071","Beverages","Cold","Jumbo","Iced Tea Lemon & Peach J ","Iced Tea Lemon & Peach J "],["712189","Beverages","Cold","Tall","Iced Tea Lemon Ginger (T)","Iced Tea Lemon Ginger (T)"],["712190","Beverages","Cold","Grande","Iced Tea Lemon Ginger (G)","Iced Tea Lemon Ginger (G)"],["712191","Beverages","Cold","Jumbo","Iced Tea Lemon Ginger (J)","Iced Tea Lemon Ginger (J)"],["713003","Manual Brew","Hot","Manual Brew","Syphon 12 Oz             ","Syphon 12 Oz             "],["713004","Manual Brew","Hot","Manual Brew","French Press 12 Oz       ","French Press 12 Oz       "],["753115","Merchandise","French Press","Unmapped","BruTrek Coffee Press 32oz","BruTrek Coffee Press 32oz"],["713005","Manual Brew","Hot","Manual Brew","AeroPress 8 Oz           ","AeroPress 8 Oz           "],["724082","Food","Sandwich","Unmapped","Turkey Baguette          ","Turkey Baguette          "],["711169","Manual Brew","Hot","Manual Brew","MB Chemex 12 Oz          ","MB Chemex 12 Oz          "],["711170","Manual Brew","Hot","Manual Brew","MB VV Dripper 12 Oz      ","MB VV Dripper 12 Oz      "],["711171","Manual Brew","Hot","Manual Brew","MB French Press 12 Oz    ","MB French Press 12 Oz    "],["711172","Manual Brew","Hot","Manual Brew","MB Aeropress 8 Oz        ","MB Aeropress 8 Oz        "],["712175","Beverages","Cold","Tall","Iced Matcha Latte (T)    ","Iced Matcha Latte (T)    "],["712176","Beverages","Cold","Grande","Iced Matcha Latte (G)    ","Iced Matcha Latte (G)    "],["712177","Beverages","Cold","Jumbo","Iced Matcha Latte (J)    ","Iced Matcha Latte (J)    "],["712201","Beverages","Cold","Tall","Ice Vegan Matcha (T)     ","Ice Vegan Matcha (T)     "],["712202","Beverages","Cold","Grande","Ice Vegan Matcha (G)     ","Ice Vegan Matcha (G)     "],["712204","Beverages","Cold","Tall","Iced Pink Matcha (T)     ","Iced Pink Matcha (T)     "],["712205","Beverages","Cold","Grande","Iced Pink Matcha (G)     ","Iced Pink Matcha (G)     "],["712206","Beverages","Cold","Jumbo","Iced Pink Matcha (J)     ","Iced Pink Matcha (J)     "],["712235","Beverages","Cold","Tall","Yukidama Matcha Latte (T)","Yukidama Matcha Latte (T)"],["712236","Beverages","Cold","Grande","Yukidama Matcha Latte (G)","Yukidama Matcha Latte (G)"],["712238","Beverages","Cold","Tall","Coco Matcha Cloud (T)    ","Coco Matcha Cloud (T)    "],["712240","Beverages","Cold","Jumbo","Coco Matcha Cloud (J)    ","Coco Matcha Cloud (J)    "],["712242","Beverages","Cold","Grande","Matcha Spring Bundle G   ","Matcha Spring Bundle G   "],["744044","Merchandise","Private Blend","Unmapped","Ethiopia Buna Tizita 200g","Ethiopia Buna Tizita 200g"],["744048","Merchandise","Private Blend","Unmapped","Colombian Vintage 200 gm ","Colombian Vintage 200 gm "],["746060","Merchandise","Private Blend","Unmapped","Guji Danisso Natural 200G","Guji Danisso Natural 200G"],["746074","Merchandise","Beans","Unmapped","Decaf House Blend 250 gm ","Decaf House Blend 250 gm "],["721014","Food","Crossiant","Unmapped","Mini Almond Croissant    ","Mini Almond Croissant    "],["712057","Beverages","Cold","Tall","Relax Mocktails T        ","Relax Mocktails T        "],["712058","Beverages","Cold","Grande","Relax Mocktails G        ","Relax Mocktails G        "],["712059","Beverages","Cold","Jumbo","Relax Mocktails J        ","Relax Mocktails J        "],["712060","Beverages","Cold","Tall","Strawberry Mocktails T   ","Strawberry Mocktails T   "],["712061","Beverages","Cold","Grande","Strawberry Mocktails G   ","Strawberry Mocktails G   "],["712062","Beverages","Cold","Jumbo","Strawberry Mocktails J   ","Strawberry Mocktails J   "],["712192","Beverages","Cold","Tall","Karkade Mocktail (T)     ","Karkade Mocktail (T)     "],["712193","Beverages","Cold","Grande","Karkade Mocktail (G)     ","Karkade Mocktail (G)     "],["712194","Beverages","Cold","Jumbo","Karkade Mocktail (J)     ","Karkade Mocktail (J)     "],["800101","Add-On","Add-On","Unmapped","House blend              ","House blend              "],["800102","Add-On","Add-On","Unmapped","Breakfast blend          ","Breakfast blend          "],["800103","Add-On","Add-On","Unmapped","Sunset blend             ","Sunset blend             "],["800104","Add-On","Add-On","Unmapped","Arabian mocha java       ","Arabian mocha java       "],["800105","Add-On","Add-On","Unmapped","French roast             ","French roast             "],["800106","Add-On","Add-On","Unmapped","Italian roast            ","Italian roast            "],["800107","Add-On","Add-On","Unmapped","Dark Espresso roast      ","Dark Espresso roast      "],["800108","Add-On","Add-On","Unmapped","Costarican               ","Costarican               "],["800109","Add-On","Add-On","Unmapped","Guatemala antigua        ","Guatemala antigua        "],["800110","Add-On","Add-On","Unmapped","Colombian Supreme        ","Colombian Supreme        "],["800111","Add-On","Add-On","Unmapped","Ethiopian sidamo         ","Ethiopian sidamo         "],["800112","Add-On","Add-On","Unmapped","Sumatran mandehling      ","Sumatran mandehling      "],["800113","Add-On","Add-On","Unmapped","Decaf Colombian supreme  ","Decaf Colombian supreme  "],["800114","Add-On","Add-On","Unmapped","National day coffee      ","National day coffee      "],["800115","Add-On","Add-On","Unmapped","Mama africa coffee       ","Mama africa coffee       "],["800117","Add-On","Add-On","Unmapped","DC The Original          ","DC The Original          "],["800118","Add-On","Add-On","Unmapped","DC Classic Coffee        ","DC Classic Coffee        "],["800119","Add-On","Add-On","Unmapped","Decaf espresso roast     ","Decaf espresso roast     "],["800120","Add-On","Add-On","Unmapped","Ethiopian guji natural   ","Ethiopian guji natural   "],["800121","Add-On","Add-On","Unmapped","African magic            ","African magic            "],["800122","Add-On","Add-On","Unmapped","Brazil Jaguar            ","Brazil Jaguar            "],["800123","Add-On","Add-On","Unmapped","Ethiopia Oromia          ","Ethiopia Oromia          "],["800124","Add-On","Add-On","Unmapped","Guatemala APCA           ","Guatemala APCA           "],["800125","Add-On","Add-On","Unmapped","Indonesian Java Volcano  ","Indonesian Java Volcano  "],["800126","Add-On","Add-On","Unmapped","Rwanda Thousand Island   ","Rwanda Thousand Island   "],["800128","Add-On","Add-On","Unmapped","Fresh Full Fat Milk      ","Fresh Full Fat Milk      "],["800129","Add-On","Add-On","Unmapped","Fresh Low Fat Milk       ","Fresh Low Fat Milk       "],["800130","Add-On","Add-On","Unmapped","Fresh Skimmed Milk       ","Fresh Skimmed Milk       "],["800131","Add-On","Add-On","Unmapped","Oat Milk                 ","Oat Milk                 "],["800132","Add-On","Add-On","Unmapped","Coconut milk             ","Coconut milk             "],["800133","Add-On","Add-On","Unmapped","Almond milk              ","Almond milk              "],["800134","Add-On","Add-On","Unmapped","UHT Soya Milk            ","UHT Soya Milk            "],["800138","Add-On","Add-On","Unmapped","Syrup Vanilla            ","Syrup Vanilla            "],["800139","Add-On","Add-On","Unmapped","Syrup Caramel            ","Syrup Caramel            "],["800140","Add-On","Add-On","Unmapped","Syrup Hazelnut           ","Syrup Hazelnut           "],["800141","Add-On","Add-On","Unmapped","Syrup Irish cream        ","Syrup Irish cream        "],["800142","Add-On","Add-On","Unmapped","Syrup Ginger             ","Syrup Ginger             "],["800143","Add-On","Add-On","Unmapped","Syrup Honey              ","Syrup Honey              "],["800144","Add-On","Add-On","Unmapped","Chocolate Sauce          ","Chocolate Sauce          "],["800145","Add-On","Add-On","Unmapped","White Chocolate Sauce    ","White Chocolate Sauce    "],["800146","Add-On","Add-On","Unmapped","Caramel Sauce            ","Caramel Sauce            "],["800147","Add-On","Add-On","Unmapped","Sweetener Sauce          ","Sweetener Sauce          "],["800149","Add-On","Add-On","Unmapped","Cold Foam                ","Cold Foam                "],["800150","Add-On","Add-On","Unmapped","Vanilla Cold Foam        ","Vanilla Cold Foam        "],["800151","Add-On","Add-On","Unmapped","Chocolate Cold Foam      ","Chocolate Cold Foam      "],["800152","Add-On","Add-On","Unmapped","Salted Caramel Cold Foam ","Salted Caramel Cold Foam "],["800153","Add-On","Add-On","Unmapped","Vanilla Whipped Cream    ","Vanilla Whipped Cream    "],["800154","Add-On","Add-On","Unmapped","Chocolate Whipped Cream  ","Chocolate Whipped Cream  "],["800155","Add-On","Add-On","Unmapped","Chocolate Drizzle        ","Chocolate Drizzle        "],["800156","Add-On","Add-On","Unmapped","Caramel Drizzle          ","Caramel Drizzle          "],["800157","Add-On","Add-On","Unmapped","Raspberry Drizzle        ","Raspberry Drizzle        "],["800158","Add-On","Add-On","Unmapped","Strawberry Drizzle       ","Strawberry Drizzle       "],["800159","Add-On","Add-On","Unmapped","Honey Drizzle            ","Honey Drizzle            "],["800160","Add-On","Add-On","Unmapped","Syrup Fresh Lemon        ","Syrup Fresh Lemon        "],["800161","Add-On","Add-On","Unmapped","Syrup Strawberry         ","Syrup Strawberry         "],["800162","Add-On","Add-On","Unmapped","Syrup Light blueberry    ","Syrup Light blueberry    "],["800163","Add-On","Add-On","Unmapped","Syrup Raspberry          ","Syrup Raspberry          "],["800164","Add-On","Add-On","Unmapped","Syrup Passion Fruit      ","Syrup Passion Fruit      "],["800165","Add-On","Add-On","Unmapped","Syrup Watermelon         ","Syrup Watermelon         "],["800166","Add-On","Add-On","Unmapped","Syrup Lemon tea          ","Syrup Lemon tea          "],["800167","Add-On","Add-On","Unmapped","Syrup Peach tea          ","Syrup Peach tea          "],["800168","Add-On","Add-On","Unmapped","Fresh Lemon              ","Fresh Lemon              "],["800169","Add-On","Add-On","Unmapped","Mint Leaves              ","Mint Leaves              "],["800170","Add-On","Add-On","Unmapped","Extra Tea Bags           ","Extra Tea Bags           "],["800174","Add-On","Add-On","Unmapped","Extra Shot DC The Orignal","Extra Shot DC The Orignal"],["800175","Add-On","Add-On","Unmapped","Extra Shot DC Classic    ","Extra Shot DC Classic    "],["800176","Add-On","Add-On","Unmapped","Extra Shot Dcf Espresso  ","Extra Shot Dcf Espresso  "],["800177","Add-On","Add-On","Unmapped","Colombian Samboni        ","Colombian Samboni        "],["800178","Add-On","Add-On","Unmapped","Ethiopian Yrgf Arch      ","Ethiopian Yrgf Arch      "],["800180","Add-On","Add-On","Unmapped","Ginger Cld Foam          ","Ginger Cld Foam          "],["800181","Add-On","Add-On","Unmapped","Colmbian Narino          ","Colmbian Narino          "],["800182","Add-On","Add-On","Unmapped","Nicaragua Bear Wandering ","Nicaragua Bear Wandering "],["800183","Add-On","Add-On","Unmapped","Without Milk             ","Without Milk             "],["800184","Add-On","Add-On","Unmapped","Guji Danisso Natural     ","Guji Danisso Natural     "],["800185","Add-On","Add-On","Unmapped","Kenya Kamvara            ","Kenya Kamvara            "],["800186","Add-On","Add-On","Unmapped","Ethiopia Buna Tizita     ","Ethiopia Buna Tizita     "],["800187","Add-On","Add-On","Unmapped","Paper Cup                ","Paper Cup                "],["800188","Add-On","Add-On","Unmapped","Plastic Cup              ","Plastic Cup              "],["800189","Add-On","Add-On","Unmapped","Costa Rican Sol Naranja  ","Costa Rican Sol Naranja  "],["800190","Add-On","Add-On","Unmapped","Low Calorie Vanilla Syrup","Low Calorie Vanilla Syrup"],["800191","Add-On","Add-On","Unmapped","Low Calorie Caramel Syrup","Low Calorie Caramel Syrup"],["800192","Add-On","Add-On","Unmapped","Low Calorie Hazelnut Syru","Low Calorie Hazelnut Syru"],["800193","Add-On","Add-On","Unmapped","Low Calorie Sugar Syrup  ","Low Calorie Sugar Syrup  "],["800195","Add-On","Add-On","Unmapped","Strawberry Cuts          ","Strawberry Cuts          "],["800196","Add-On","Add-On","Unmapped","Passion Fruit Cubes      ","Passion Fruit Cubes      "],["800197","Add-On","Add-On","Unmapped","Raspberry Fruit          ","Raspberry Fruit          "],["800198","Add-On","Add-On","Unmapped","Blueberry Fruit          ","Blueberry Fruit          "],["800199","Add-On","Add-On","Unmapped","Spiced Pumpkin Syrup     ","Spiced Pumpkin Syrup     "],["800201","Add-On","Add-On","Unmapped","Black Tea                ","Black Tea                "],["800202","Add-On","Add-On","Unmapped","Green Tea                ","Green Tea                "],["800203","Add-On","Add-On","Unmapped","Jasmine Green T          ","Jasmine Green T          "],["800205","Add-On","Add-On","Unmapped","Earl Grey Tea            ","Earl Grey Tea            "],["800207","Add-On","Add-On","Unmapped","Colombian Vintage        ","Colombian Vintage        "],["800208","Add-On","Add-On","Unmapped","El Salvador Carlos Pola  ","El Salvador Carlos Pola  "],["800209","Add-On","Add-On","Unmapped","Natural Honey            ","Natural Honey            "],["800210","Add-On","Add-On","Unmapped","Butter                   ","Butter                   "],["800211","Add-On","Add-On","Unmapped","Jam                      ","Jam                      "],["752019","Merchandise","Mugs","Unmapped","Monty Cup Matte Black 3Oz","Monty Cup Matte Black 3Oz"],["752020","Merchandise","Mugs","Unmapped","Monty Cup Matte White 3Oz","Monty Cup Matte White 3Oz"],["752021","Merchandise","Mugs","Unmapped","Monty Cup Matte BK 4.5Oz ","Monty Cup Matte BK 4.5Oz "],["752022","Merchandise","Mugs","Unmapped","Monty Cup Matte WT 4.5Oz ","Monty Cup Matte WT 4.5Oz "],["752023","Merchandise","Mugs","Unmapped","Monty Cup Matte Black 6Oz","Monty Cup Matte Black 6Oz"],["752024","Merchandise","Mugs","Unmapped","Monty Cup Matte White 6Oz","Monty Cup Matte White 6Oz"],["752031","Merchandise","Mugs","Unmapped","Set of Cortado Glass     ","Set of Cortado Glass     "],["752032","Merchandise","Mugs","Unmapped","Set of Flat white Glass  ","Set of Flat white Glass  "],["752033","Merchandise","Mugs","Unmapped","Enamel Mug White 10 Oz   ","Enamel Mug White 10 Oz   "],["752034","Merchandise","Mugs","Unmapped","Enamel Mug Black 10 Oz   ","Enamel Mug Black 10 Oz   "],["752035","Merchandise","Mugs","Unmapped","Enamel Mug Blue 10 Oz    ","Enamel Mug Blue 10 Oz    "],["752036","Merchandise","Mugs","Unmapped","Enamel Mug Green 10 Oz   ","Enamel Mug Green 10 Oz   "],["752037","Merchandise","Mugs","Unmapped","Enamel Mug Pink 10 Oz    ","Enamel Mug Pink 10 Oz    "],["752038","Merchandise","Mugs","Unmapped","Gold Ceramic Mug 9 Oz    ","Gold Ceramic Mug 9 Oz    "],["752039","Merchandise","Mugs","Unmapped","Rose Gold Ceramic Mug 9Oz","Rose Gold Ceramic Mug 9Oz"],["752040","Merchandise","Mugs","Unmapped","Platinum Ceramic Mug 9 Oz","Platinum Ceramic Mug 9 Oz"],["752041","Merchandise","Mugs","Unmapped","Gamer Multi Sign Mug 9 Oz","Gamer Multi Sign Mug 9 Oz"],["752042","Merchandise","Mugs","Unmapped","Gamer Square Sign Mug 9Oz","Gamer Square Sign Mug 9Oz"],["752043","Merchandise","Mugs","Unmapped","Gamer Circle Sign Mug 9Oz","Gamer Circle Sign Mug 9Oz"],["752044","Merchandise","Mugs","Unmapped","Gamer Triangle SignMug9Oz","Gamer Triangle SignMug9Oz"],["752045","Merchandise","Mugs","Unmapped","Gamer X Sign Mug 9 Oz    ","Gamer X Sign Mug 9 Oz    "],["752046","Merchandise","Mugs","Unmapped","Pastel Grey latte Mug12Oz","Pastel Grey latte Mug12Oz"],["752047","Merchandise","Mugs","Unmapped","Pastel Peach LatteMug12Oz","Pastel Peach LatteMug12Oz"],["752048","Merchandise","Mugs","Unmapped","Pastel Lemon LatteMug12Oz","Pastel Lemon LatteMug12Oz"],["752049","Merchandise","Mugs","Unmapped","Pastel Pink Latte Mug 2Oz","Pastel Pink Latte Mug 2Oz"],["752050","Merchandise","Mugs","Unmapped","Pastel Pistachio Mug12Oz ","Pastel Pistachio Mug12Oz "],["752051","Merchandise","Mugs","Unmapped","Pastel Light Grey Mug12Oz","Pastel Light Grey Mug12Oz"],["752052","Merchandise","Mugs","Unmapped","Enamel Mug Pink 12 Oz    ","Enamel Mug Pink 12 Oz    "],["752053","Merchandise","Mugs","Unmapped","Enamel Mug Black 12 Oz   ","Enamel Mug Black 12 Oz   "],["752054","Merchandise","Mugs","Unmapped","Enamel Mug Sky Blue 12 Oz","Enamel Mug Sky Blue 12 Oz"],["752055","Merchandise","Mugs","Unmapped","Enamel Cactus Green 12 Oz","Enamel Cactus Green 12 Oz"],["752056","Merchandise","Mugs","Unmapped","Enamel Mug White 12 Oz   ","Enamel Mug White 12 Oz   "],["752057","Merchandise","Mugs","Unmapped","Milenil Bronz Gold Mug9Oz","Milenil Bronz Gold Mug9Oz"],["752058","Merchandise","Mugs","Unmapped","Millennial WT Rim Mug 9Oz","Millennial WT Rim Mug 9Oz"],["752059","Merchandise","Mugs","Unmapped","Blue Bubble Mug 11 Oz    ","Blue Bubble Mug 11 Oz    "],["752060","Merchandise","Mugs","Unmapped","Gummy Pink Mug 11 Oz     ","Gummy Pink Mug 11 Oz     "],["752061","Merchandise","Mugs","Unmapped","Pearl White Mug 11 Oz    ","Pearl White Mug 11 Oz    "],["752062","Merchandise","Mugs","Unmapped","Cactus Green Mug 11 Oz   ","Cactus Green Mug 11 Oz   "],["752063","Merchandise","Mugs","Unmapped","Charcoal BK WT Mug 11Oz  ","Charcoal BK WT Mug 11Oz  "],["752064","Merchandise","Mugs","Unmapped","Charcoal Rose Gld Mug11Oz","Charcoal Rose Gld Mug11Oz"],["752065","Merchandise","Mugs","Unmapped","Charcoal UV Print Mug11Oz","Charcoal UV Print Mug11Oz"],["752066","Merchandise","Mugs","Unmapped","Blue Bubble Mug 8 Oz     ","Blue Bubble Mug 8 Oz     "],["752067","Merchandise","Mugs","Unmapped","Gummy Pink Mug 8 Oz      ","Gummy Pink Mug 8 Oz      "],["752068","Merchandise","Mugs","Unmapped","Pearl White Mug 8 Oz     ","Pearl White Mug 8 Oz     "],["752069","Merchandise","Mugs","Unmapped","Cactus Green Mug 8 Oz    ","Cactus Green Mug 8 Oz    "],["752070","Merchandise","Mugs","Unmapped","Charcoal BK WT Mug 8 Oz  ","Charcoal BK WT Mug 8 Oz  "],["752071","Merchandise","Mugs","Unmapped","Charcoal Rose Gold Mug8Oz","Charcoal Rose Gold Mug8Oz"],["752072","Merchandise","Mugs","Unmapped","Charcoal UV Print Mug 8Oz","Charcoal UV Print Mug 8Oz"],["752073","Merchandise","Mugs","Unmapped","Blue Bubble Mug 6 Oz     ","Blue Bubble Mug 6 Oz     "],["752074","Merchandise","Mugs","Unmapped","Gummy Pink Mug 6 Oz      ","Gummy Pink Mug 6 Oz      "],["752075","Merchandise","Mugs","Unmapped","Pearl White Mug 6 Oz     ","Pearl White Mug 6 Oz     "],["752076","Merchandise","Mugs","Unmapped","Cactus Green Mug 6 Oz    ","Cactus Green Mug 6 Oz    "],["752077","Merchandise","Mugs","Unmapped","Charcoal BK WT Mug6Oz    ","Charcoal BK WT Mug6Oz    "],["752078","Merchandise","Mugs","Unmapped","Charcoal Rose Gold Mug6Oz","Charcoal Rose Gold Mug6Oz"],["752079","Merchandise","Mugs","Unmapped","Charcoal UV Print Mug6Oz ","Charcoal UV Print Mug6Oz "],["752080","Merchandise","Mugs","Unmapped","Blue Bubble Mug 3 Oz     ","Blue Bubble Mug 3 Oz     "],["752081","Merchandise","Mugs","Unmapped","Gummy Pink Mug 3 Oz      ","Gummy Pink Mug 3 Oz      "],["752082","Merchandise","Mugs","Unmapped","Pearl White Mug 3 Oz     ","Pearl White Mug 3 Oz     "],["752083","Merchandise","Mugs","Unmapped","Cactus Green Mug 3 Oz    ","Cactus Green Mug 3 Oz    "],["752084","Merchandise","Mugs","Unmapped","Charcoal BK WT Mug3Oz    ","Charcoal BK WT Mug3Oz    "],["752085","Merchandise","Mugs","Unmapped","Charcoal Rose Gold Mug3Oz","Charcoal Rose Gold Mug3Oz"],["752086","Merchandise","Mugs","Unmapped","Charcoal UV Print Mug3Oz ","Charcoal UV Print Mug3Oz "],["752087","Merchandise","Mugs","Unmapped","Espresso Glass Set       ","Espresso Glass Set       "],["752088","Merchandise","Mugs","Unmapped","Perl White Mug 11OZ      ","Perl White Mug 11OZ      "],["752089","Merchandise","Mugs","Unmapped","Perl White Mug 8OZ       ","Perl White Mug 8OZ       "],["752090","Merchandise","Mugs","Unmapped","Perl White Mug 6OZ       ","Perl White Mug 6OZ       "],["752091","Merchandise","Mugs","Unmapped","Perl White Mug 3OZ       ","Perl White Mug 3OZ       "],["752093","Merchandise","Mugs","Unmapped","Destination Enamel Mug 10","Destination Enamel Mug 10"],["753114","Merchandise","Mugs","Unmapped","Singlewall SScupblack10Oz","Singlewall SScupblack10Oz"],["754121","Merchandise","Mugs","Unmapped","Latte Mug White 12 Oz    ","Latte Mug White 12 Oz    "],["754122","Merchandise","Mugs","Unmapped","Latte Mug Black 12 Oz    ","Latte Mug Black 12 Oz    "],["724086","Food","Sandwich","Unmapped","Omelet Multigrain        ","Omelet Multigrain        "],["724087","Food","Sandwich","Unmapped","Cheddar Cheese Egg Multi ","Cheddar Cheese Egg Multi "],["724088","Food","Sandwich","Unmapped","Multigrain Labna&Za'atar ","Multigrain Labna&Za'atar "],["724089","Food","Sandwich","Unmapped","Multi TL Chee&Olive Cream","Multi TL Chee&Olive Cream"],["724103","Food","Sandwich","Unmapped","Chicken Pesto            ","Chicken Pesto            "],["752094","Merchandise","Mugs","Unmapped","National Day Enamel Mug  ","National Day Enamel Mug  "],["759043","Combo","Hot","Combo","COD 190Oz + Mufatal Royal","COD 190Oz + Mufatal Royal"],["759044","Combo","Hot","Combo","COD 190Oz + Mufattal Prem","COD 190Oz + Mufattal Prem"],["759045","Combo","Hot","Combo","COD 190Oz + Rutab Galaxy ","COD 190Oz + Rutab Galaxy "],["759046","Combo","Hot","Combo","COD 70Oz + Royal + ND Mug","COD 70Oz + Royal + ND Mug"],["759047","Combo","Hot","Combo","COD 70Oz + Prem + ND Mug ","COD 70Oz + Prem + ND Mug "],["759048","Combo","Hot","Combo","COD 70Oz + Galxy + ND Mug","COD 70Oz + Galxy + ND Mug"],["759049","Merchandise","Mugs / Dates","Unmapped","National Day Royal Gift  ","National Day Royal Gift  "],["711073","Beverages","Hot","Short","Fresh Steamed Milk S     ","Fresh Steamed Milk S     "],["711074","Beverages","Hot","Tall","Fresh Steamed Milk T     ","Fresh Steamed Milk T     "],["711075","Beverages","Hot","Grande","Fresh Steamed Milk G     ","Fresh Steamed Milk G     "],["711076","Beverages","Hot","Jumbo","Fresh Steamed Milk J     ","Fresh Steamed Milk J     "],["711077","Beverages","Hot","Short","Hot Chocolate S          ","Hot Chocolate S          "],["711078","Beverages","Hot","Tall","Hot Chocolate T          ","Hot Chocolate T          "],["711079","Beverages","Hot","Grande","Hot Chocolate G          ","Hot Chocolate G          "],["711080","Beverages","Hot","Jumbo","Hot Chocolate J          ","Hot Chocolate J          "],["711086","Beverages","Hot","Tall","Ruby Hot Chocolate T     ","Ruby Hot Chocolate T     "],["711087","Beverages","Hot","Grande","Ruby Hot Chocolate G     ","Ruby Hot Chocolate G     "],["711090","Beverages","Hot","Tall","Toffee Hot Chocolate T   ","Toffee Hot Chocolate T   "],["711091","Beverages","Hot","Grande","Toffee Hot Chocolate G   ","Toffee Hot Chocolate G   "],["711094","Beverages","Hot","Tall","Hazelnut Hot Chocolate T ","Hazelnut Hot Chocolate T "],["711095","Beverages","Hot","Grande","Hazelnut Hot Chocolate G ","Hazelnut Hot Chocolate G "],["711096","Beverages","Hot","Jumbo","Hazelnut Hot Chocolate J ","Hazelnut Hot Chocolate J "],["711098","Beverages","Hot","Tall","Ginger Hot Chocolate T   ","Ginger Hot Chocolate T   "],["711099","Beverages","Hot","Grande","Ginger Hot Chocolate G   ","Ginger Hot Chocolate G   "],["711100","Beverages","Hot","Jumbo","Ginger Hot Chocolate J   ","Ginger Hot Chocolate J   "],["711101","Beverages","Hot","Short","Steamed Ginger S         ","Steamed Ginger S         "],["711102","Beverages","Hot","Tall","Steamed Ginger T         ","Steamed Ginger T         "],["711103","Beverages","Hot","Grande","Steamed Ginger G         ","Steamed Ginger G         "],["711104","Beverages","Hot","Jumbo","Steamed Ginger J         ","Steamed Ginger J         "],["711158","Beverages","Hot","Short","Steamed Milk Ginger S    ","Steamed Milk Ginger S    "],["711159","Beverages","Hot","Tall","Steamed Milk Ginger T    ","Steamed Milk Ginger T    "],["711160","Beverages","Hot","Grande","Steamed Milk Ginger G    ","Steamed Milk Ginger G    "],["711161","Beverages","Hot","Jumbo","Steamed Milk Ginger J    ","Steamed Milk Ginger J    "],["711185","Beverages","Hot","Short","Ginger Chai Latte (S)    ","Ginger Chai Latte (S)    "],["711186","Beverages","Hot","Tall","Ginger Chai Latte (T)    ","Ginger Chai Latte (T)    "],["711187","Beverages","Hot","Grande","Ginger Chai Latte (G)    ","Ginger Chai Latte (G)    "],["711188","Beverages","Hot","Jumbo","Ginger Chai Latte (J)    ","Ginger Chai Latte (J)    "],["711201","Beverages","Hot","Short","Hot Matcha Latte (S)     ","Hot Matcha Latte (S)     "],["711202","Beverages","Hot","Tall","Hot Matcha Latte (T)     ","Hot Matcha Latte (T)     "],["711203","Beverages","Hot","Grande","Hot Matcha Latte (G)     ","Hot Matcha Latte (G)     "],["711204","Beverages","Hot","Jumbo","Hot Matcha Latte (J)     ","Hot Matcha Latte (J)     "],["711210","Beverages","Hot","Short","Chai Latte (S)           ","Chai Latte (S)           "],["711211","Beverages","Hot","Tall","Chai Latte (T)           ","Chai Latte (T)           "],["711212","Beverages","Hot","Grande","Chai Latte (G)           ","Chai Latte (G)           "],["711213","Beverages","Hot","Jumbo","Chai Latte (J)           ","Chai Latte (J)           "],["712258","Hybrid","Hot","Short","Hot Chocolate HB         ","Hot Chocolate HB         "],["732004","Grab & Go","Nuts","Unmapped","Peanut                   ","Peanut                   "],["732005","Grab & Go","Nuts","Unmapped","Mixed Nuts               ","Mixed Nuts               "],["732006","Grab & Go","Nuts","Unmapped","Mixed With Raisin        ","Mixed With Raisin        "],["1985","Packaging           ","Packaging           ","Unmapped","2 Cup Holder             ","2 Cup Holder             "],["1986","Packaging           ","Packaging           ","Unmapped","4 Cup Holder             ","4 Cup Holder             "],["1987","Packaging           ","Packaging           ","Unmapped","Dine-In Mug              ","Dine-In Mug              "],["1988","Packaging           ","Packaging           ","Unmapped","Paper Cup                ","Paper Cup                "],["1989","Packaging           ","Packaging           ","Unmapped","Single Cake Box          ","Single Cake Box          "],["1990","Packaging           ","Packaging           ","Unmapped","4 Pcs Pastry Box         ","4 Pcs Pastry Box         "],["1991","Packaging           ","Packaging           ","Unmapped","6 Pcs Pastry Box         ","6 Pcs Pastry Box         "],["1992","Packaging           ","Packaging           ","Unmapped","12 Pcs Pastry Box        ","12 Pcs Pastry Box        "],["1993","Packaging           ","Packaging           ","Unmapped","Sandwich Box             ","Sandwich Box             "],["1994","Packaging           ","Packaging           ","Unmapped","Friend Cake Box          ","Friend Cake Box          "],["1995","Packaging           ","Packaging           ","Unmapped","Bagel Box                ","Bagel Box                "],["1996","Packaging           ","Packaging           ","Unmapped","Paper Food Tray Big White","Paper Food Tray Big White"],["1997","Packaging           ","Packaging           ","Unmapped","Paper Food Tray Small Whi","Paper Food Tray Small Whi"],["1998","Packaging           ","Packaging           ","Unmapped","Mini Pastry Bag          ","Mini Pastry Bag          "],["1999","Packaging           ","Packaging           ","Unmapped","Medium Pastry Bag        ","Medium Pastry Bag        "],["2000","Packaging           ","Packaging           ","Unmapped","Large Pastry Bag         ","Large Pastry Bag         "],["2001","Packaging           ","Packaging           ","Unmapped","Packaging Not Required   ","Packaging Not Required   "],["724073","Food","Sandwich","Unmapped","Chicken Fajita Panini    ","Chicken Fajita Panini    "],["724074","Food","Sandwich","Unmapped","Haloumi & Za'atar Panini ","Haloumi & Za'atar Panini "],["724075","Food","Sandwich","Unmapped","Cheddar Cheese Panini    ","Cheddar Cheese Panini    "],["724076","Food","Sandwich","Unmapped","Spicy Tuna Panini        ","Spicy Tuna Panini        "],["724077","Food","Sandwich","Unmapped","Mozzarella&Tomato Panini ","Mozzarella&Tomato Panini "],["724078","Food","Sandwich","Unmapped","Turkey & Cheese Panini   ","Turkey & Cheese Panini   "],["712136","Manual Brew","Cold","Manual Brew","Iced VV Drip V12         ","Iced VV Drip V12         "],["713001","Manual Brew","Hot","Manual Brew","Chemex 12 Oz             ","Chemex 12 Oz             "],["713002","Manual Brew","Hot","Manual Brew","Dripper 12 Oz            ","Dripper 12 Oz            "],["755133","Merchandise","Driper","Unmapped","Gls Srver VV Driper 400ml","Gls Srver VV Driper 400ml"],["713009","Premium","Hot","4 oz","Espresso Premium         ","Espresso Premium         "],["713010","Merchandise","Mocha Pot","Unmapped","Moka Pot 2 Oz            ","Moka Pot 2 Oz            "],["755136","Merchandise","Mocha Pot","Unmapped","Mis Moka Inova Blak 6Cups","Mis Moka Inova Blak 6Cups"],["734022","Grab & Go","Water","Unmapped","dr.CAFE NAT Mineral Water","dr.CAFE NAT Mineral Water"],["734023","Grab & Go","Water","Unmapped","Evian Mineral Water 500ml","Evian Mineral Water 500ml"],["734024","Grab & Go","Water","Unmapped","Sparkling Nat Mineral Wat","Sparkling Nat Mineral Wat"],["734026","Grab & Go","Water","Unmapped","Mineral Water 330 ml     ","Mineral Water 330 ml     "],["734032","Grab & Go","Water","Unmapped","dr.CAFE Naturl Watr 350ml","dr.CAFE Naturl Watr 350ml"],["721024","Food","Rolls","Unmapped","Dates Danish             ","Dates Danish             "],["721025","Food","Rolls","Unmapped","Chocolate Twist          ","Chocolate Twist          "],["721080","Food","Rolls","Unmapped","Date Danish Roll         ","Date Danish Roll         "],["721083","Food","Rolls","Unmapped","Fig Danish               ","Fig Danish               "],["745033","Merchandise","Beans","Unmapped","Saudi Coffee Whole 250gm ","Saudi Coffee Whole 250gm "],["745034","Merchandise","Beans","Unmapped","Saudi Coffee Ground 50 gm","Saudi Coffee Ground 50 gm"],["745039","Merchandise","Beans","Unmapped","Saudi Coffee Ground 250gm","Saudi Coffee Ground 250gm"],["742013","Merchandise","Beans","Unmapped","Ethiopian Sidamo 227G    ","Ethiopian Sidamo 227G    "],["742029","Merchandise","Beans","Unmapped","Ethiopia Sidamo 250gm    ","Ethiopia Sidamo 250gm    "],["742030","Merchandise","Beans","Unmapped","Sumatran Mandheling 250gm","Sumatran Mandheling 250gm"],["742035","Merchandise","Beans","Unmapped","Colombian Supreme 250gm  ","Colombian Supreme 250gm  "],["742036","Merchandise","Beans","Unmapped","Costa Rican 250gm        ","Costa Rican 250gm        "],["753125","Merchandise","Stationary","Unmapped","Transparent Umbrella     ","Transparent Umbrella     "],["753128","Merchandise","Stationary","Unmapped","dr.Cafe Magnetic Pen WT  ","dr.Cafe Magnetic Pen WT  "],["753129","Merchandise","Stationary","Unmapped","dr.Cafe Magnetic Pen BK  ","dr.Cafe Magnetic Pen BK  "],["754109","Merchandise","Stationary","Unmapped","V12 Mouse Pad            ","V12 Mouse Pad            "],["754128","Merchandise","Stationary","Unmapped","dr.CAFE Coaster          ","dr.CAFE Coaster          "],["741010","Merchandise","Private blend","Unmapped","Ethiopian Yirgacheffe 250","Ethiopian Yirgacheffe 250"],["744039","Merchandise","Private blend","Unmapped","Ethiopian Yirgacheffe 200","Ethiopian Yirgacheffe 200"],["721026","Food","Tart","Unmapped","Strawberry Tart          ","Strawberry Tart          "],["721091","Food","Tart","Unmapped","Hazelnut Apple Tart      ","Hazelnut Apple Tart      "],["721097","Food","Tart","Unmapped","Pecan Tart               ","Pecan Tart               "],["721102","Food","Tart","Unmapped","Creme Brulee Tart Indivis","Creme Brulee Tart Indivis"],["711105","Beverages","Hot","Short","Black Tea S              ","Black Tea S              "],["711106","Beverages","Hot","Tall","Black Tea T              ","Black Tea T              "],["711107","Beverages","Hot","Grande","Black Tea G              ","Black Tea G              "],["711108","Beverages","Hot","Jumbo","Black Tea J              ","Black Tea J              "],["711109","Beverages","Hot","Short","Green Tea S              ","Green Tea S              "],["711110","Beverages","Hot","Tall","Green Tea T              ","Green Tea T              "],["711111","Beverages","Hot","Grande","Green Tea G              ","Green Tea G              "],["711112","Beverages","Hot","Jumbo","Green Tea J              ","Green Tea J              "],["711113","Beverages","Hot","Short","Jasmine Green Tea S      ","Jasmine Green Tea S      "],["711114","Beverages","Hot","Tall","Jasmine Green Tea T      ","Jasmine Green Tea T      "],["711115","Beverages","Hot","Grande","Jasmine Green Tea G      ","Jasmine Green Tea G      "],["711116","Beverages","Hot","Jumbo","Jasmine Green Tea J      ","Jasmine Green Tea J      "],["711117","Beverages","Hot","Short","Chamomile Herb Tea S     ","Chamomile Herb Tea S     "],["711118","Beverages","Hot","Tall","Chamomile Herb Tea T     ","Chamomile Herb Tea T     "],["711119","Beverages","Hot","Grande","Chamomile Herb Tea G     ","Chamomile Herb Tea G     "],["711121","Beverages","Hot","Short","Earl Grey Tea S          ","Earl Grey Tea S          "],["711122","Beverages","Hot","Tall","Earl Grey Tea T          ","Earl Grey Tea T          "],["711123","Beverages","Hot","Grande","Earl Grey Tea G          ","Earl Grey Tea G          "],["711124","Beverages","Hot","Jumbo","Earl Grey Tea J          ","Earl Grey Tea J          "],["711125","Beverages","Hot","Short","Moroccan Mint Green Tea S","Moroccan Mint Green Tea S"],["711126","Beverages","Hot","Tall","Moroccan Mint Green Tea T","Moroccan Mint Green Tea T"],["711127","Beverages","Hot","Grande","Moroccan Mint Green Tea G","Moroccan Mint Green Tea G"],["711128","Beverages","Hot","Jumbo","Moroccan Mint Green Tea J","Moroccan Mint Green Tea J"],["754107","Merchandise","Tote Bag","Unmapped","Cotton Tote Bag White    ","Cotton Tote Bag White    "],["753089","Merchandise","Tumbler","Unmapped","Leak Lock Thermos Red12Oz","Leak Lock Thermos Red12Oz"],["753091","Merchandise","Tumbler","Unmapped","Vacuum Bottle Marble     ","Vacuum Bottle Marble     "],["753092","Merchandise","Tumbler","Unmapped","Vacuum Bottle Black      ","Vacuum Bottle Black      "],["753095","Merchandise","Tumbler","Unmapped","Port Tumbler White 10 Oz ","Port Tumbler White 10 Oz "],["753096","Merchandise","Tumbler","Unmapped","Port Tumbler Black 10 Oz ","Port Tumbler Black 10 Oz "],["753097","Merchandise","Tumbler","Unmapped","Gladiator Tumbler White  ","Gladiator Tumbler White  "],["753098","Merchandise","Tumbler","Unmapped","Gladiator Tumbler Black  ","Gladiator Tumbler Black  "],["753102","Merchandise","Tumbler","Unmapped","Athleisure Tumbler White ","Athleisure Tumbler White "],["753103","Merchandise","Tumbler","Unmapped","Athleisure Tumbler Blue  ","Athleisure Tumbler Blue  "],["753104","Merchandise","Tumbler","Unmapped","StanleyFlowFlipBlack 30Oz","StanleyFlowFlipBlack 30Oz"],["753105","Merchandise","Tumbler","Unmapped","StanleyFlowFlip Rose 30Oz","StanleyFlowFlip Rose 30Oz"],["753112","Merchandise","Tumbler","Unmapped","DoublewallVacumTmbler16Oz","DoublewallVacumTmbler16Oz"],["753113","Merchandise","Tumbler","Unmapped","DoublewallVacumTmbler12Oz","DoublewallVacumTmbler12Oz"],["753117","Merchandise","Tumbler","Unmapped","BruTrek Camp Cup 8oz     ","BruTrek Camp Cup 8oz     "],["724072","Food","Sandwich","Unmapped","Chicken Fajita Wrap      ","Chicken Fajita Wrap      "],["711120","Ignore","Ignore","Ignore","Chamomile Herb Tea J     ","Chamomile Herb Tea J     "],["711129","Ignore","Ignore","Ignore","Fresh COD Refill S       ","Fresh COD Refill S       "],["711145","Ignore","Ignore","Ignore","Caramel Coffee Mocha J   ","Caramel Coffee Mocha J   "],["711151","Ignore","Ignore","Ignore","Nutella Hot Chocolate T  ","Nutella Hot Chocolate T  "],["712044","Ignore","Ignore","Ignore","Iced Pistachio Latte T   ","Iced Pistachio Latte T   "],["712239","Ignore","Ignore","Ignore","Coco Matcha Cloud (G)    ","Coco Matcha Cloud (G)    "],["712269","Ignore","Ignore","Ignore","Fighter Shots Ginger     ","Fighter Shots Ginger     "],["713019","Ignore","Ignore","Ignore","Ruby Foam Cold Brew G    ","Ruby Foam Cold Brew G    "],["721013","Ignore","Ignore","Ignore","Mini Rose Croissant      ","Mini Rose Croissant      "],["721046","Ignore","Ignore","Ignore","Mini Pistachio Croissant ","Mini Pistachio Croissant "],["723064","Ignore","Ignore","Ignore","Creme Brulee Cheesecake  ","Creme Brulee Cheesecake  "],["724071","Ignore","Ignore","Ignore","Triple Cheese Wrap       ","Triple Cheese Wrap       "],["724081","Ignore","Ignore","Ignore","Cheddar Cheese Baguette  ","Cheddar Cheese Baguette  "],["724090","Ignore","Ignore","Ignore","Multigrain Tuna Sandwich ","Multigrain Tuna Sandwich "],["724091","Ignore","Ignore","Ignore","Spicy Cheese Bagel       ","Spicy Cheese Bagel       "],["733019","Ignore","Ignore","Ignore","Mixed Cookies 6 Pcs Box  ","Mixed Cookies 6 Pcs Box  "],["741001","Ignore","Ignore","Ignore","African Magic 200 Grams  ","African Magic 200 Grams  "],["744042","Ignore","Ignore","Ignore","Nicaragua Bear Wandering ","Nicaragua Bear Wandering "],["745031","Ignore","Ignore","Ignore","SA Coffee Ground Sachet  ","SA Coffee Ground Sachet  "],["746045","Ignore","Ignore","Ignore","Ethiopia Oromia 8 Sachet ","Ethiopia Oromia 8 Sachet "],["751010","Ignore","Ignore","Ignore","Chamomile T Box 24Sachet ","Chamomile T Box 24Sachet "],["753100","Ignore","Ignore","Ignore","Matt Black Tumbler 14 Oz ","Matt Black Tumbler 14 Oz "],["753106","Ignore","Ignore","Ignore","StanleyFlowFlipCitron30Oz","StanleyFlowFlipCitron30Oz"],["753116","Ignore","Ignore","Ignore","BruTrek French Press 24oz","BruTrek French Press 24oz"],["753118","Ignore","Ignore","Ignore","Airscape Canister 32oz   ","Airscape Canister 32oz   "],["754111","Ignore","Ignore","Ignore","Thank You Card           ","Thank You Card           "],["755148","Ignore","Ignore","Ignore","S/S Spon Clip Gold 18cm  ","S/S Spon Clip Gold 18cm  "],["790101","Ignore","Ignore","Ignore","Workstation - 3Hours     ","Workstation - 3Hours     "],["790107","Ignore","Ignore","Ignore","Conference Room Exra Hour","Conference Room Exra Hour"],["790108","Ignore","Ignore","Ignore","Conference Rom Exra Guest","Conference Rom Exra Guest"],["800200","Ignore","Ignore","Ignore","No Whipped Cream         ","No Whipped Cream         "],["800206","Ignore","Ignore","Ignore","Moroccan Mint Green Tea  ","Moroccan Mint Green Tea  "],["900001","Ignore","Ignore","Ignore","Delivery Charges         ","Delivery Charges         "]],"name":"Category.xlsx","updated":"2026-11-16T20:42:09.293Z"},"allocation":{"rows":[["72","Amal",""],["91","Imran",""],["31","Hassan",""],["32","Mostafa",""],["45","Mostafa",""],["46","Mostafa",""],["74","Mostafa",""],["47","Hassan",""],["101","Hassan",""],["110","Yousuf",""],["112","Amal",""],["117","Sunil",""],["121","Sunil",""],["122","Pravin",""],["128","Hassan",""],["136","Hassan",""],["142","Hassan",""],["145","Yousuf",""],["156","Amal",""],["159","Hassan",""],["160","Sunil",""],["161","Yousuf",""],["176","Mostafa",""],["194","Pravin",""],["200","Pravin",""],["204","Mostafa",""],["213","Yousuf",""],["214","Mostafa",""],["217","Junaid",""],["218","Pravin",""],["219","Hassan",""],["221","Mostafa",""],["222","Sunil",""],["229","Imran",""],["231","Imran",""],["233","Imran",""],["234","Imran",""],["236","Mostafa",""],["240","Sunil",""],["242","Amal",""],["245","Sunil",""],["246","Amal",""],["247","Amal",""],["251","Yousuf",""],["257","Mostafa",""],["263","Junaid",""],["265","Sunil",""],["266","Amal",""],["270","Junaid",""],["273","Mostafa",""],["278","Imran",""],["280","Junaid",""],["281","Hassan",""],["282","Yousuf",""],["284","Imran",""],["285","Mostafa",""],["286","Hassan",""],["287","Pravin",""],["288","Sunil",""],["291","Hassan",""],["293","Junaid",""],["294","Amal",""],["295","Imran",""],["296","Junaid",""],["300","Junaid",""],["302","Pravin",""],["303","Pravin",""],["304","Yousuf",""],["305","Yousuf",""],["306","Sunil",""],["307","Sunil",""],["308","Imran",""],["309","Imran",""],["311","Yousuf",""],["312","Imran",""],["313","Junaid",""],["315","Junaid",""],["316","Junaid",""],["317","Yousuf",""],["322","Junaid",""]],"name":"Allocation.csv","updated":"2026-11-16T16:10:23.764Z"},"source":{"url":"https://nilxeuaurdxcsdplufgo.supabase.co/storage/v1/object/public/Menu%20Mix/Menu%20Mix.xlsx","label":"Menu Mix/Menu Mix.xlsx"}}</script>
+<script id="embeddedRef" type="application/json">{"category":null,"allocation":null}</script>
 <script>
 'use strict';
 const PRISTINE='<!DOCTYPE html>\n'+document.documentElement.outerHTML; // untouched page source, used to save a copy with new mappings
@@ -632,15 +670,34 @@ const refReady=()=>!!(ref.category&&ref.category.rows.length&&ref.allocation&&re
 const canBuild=()=>!!(files.menu&&refReady());
 const refSig=()=>refReady()?ref.category.updated+'|'+ref.allocation.updated:'';
 const pickRef=(builtin,saved)=>!saved?builtin:(!builtin||saved.updated>builtin.updated)?saved:builtin;
+/* SUPABASE: everyone signs in; each person receives only their own stores' data (filtered in the
+   database, see supabase_setup.sql). Files are uploaded to the private bucket below with these
+   names; when an admin opens the dashboard, changed files are copied into the database.
+   The anon key is the project's public "anon" key; it is meant to be public.
+   Leave anonKey empty to go back to the old way (upload the files by hand in this page). */
+const SUPABASE={
+  url:'https://lktzoodnektvuznpkswq.supabase.co',
+  anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdHpvb2RuZWt0dnV6bnBrc3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ5MzMxMjQsImV4cCI6MjExMDUwOTEyNH0.a80uHPYiJSdwruUsmxduyEv0hZr2RtL8wW9-d6NWfXk',
+  bucket:'Menu Mix',
+  files:{menu:'Menu Mix.xlsx',category:'Category.xlsx',allocation:'Allocation.csv',users:'Users.csv'}
+};
+const AUTHMODE=!!(SUPABASE.url&&SUPABASE.anonKey);
+let sbClient=null;
+function sb(){
+  if(sbClient)return sbClient;
+  if(!window.supabase||!window.supabase.createClient)throw Error('the Supabase library has not loaded (internet connection needed)');
+  return sbClient=window.supabase.createClient(SUPABASE.url,SUPABASE.anonKey,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'viewx-mm-auth'}});
+}
 // A downloaded copy carries both mappings inside it: they are permanent there, with no upload option.
-const LOCKED=!!(builtinRef.category&&builtinRef.allocation);
+// With Supabase the mappings come from the database, so the file is locked the same way.
+const LOCKED=AUTHMODE||!!(builtinRef.category&&builtinRef.allocation);
 function applyLockedMode(){
   if(!LOCKED)return;
   // Category and Allocation are part of the code here, so their cards and buttons are removed entirely
   ['category','allocation'].forEach(type=>$(type+'File').closest('.upload-card').remove());
   $('bakeBtn').parentElement.remove();
   $('srcSettings').remove();
-  if(SOURCE){applySourceMode();return}
+  if(SOURCE||AUTHMODE){applySourceMode();return}
   // "Upload Data" becomes "Menu Mix Update": a single upload for the sales file
   $('uploadArea').style.gridTemplateColumns='minmax(0,560px)';
   const nav=document.querySelector('.navitem[data-view="upload"]');
@@ -791,7 +848,7 @@ function applySourceMode(){
   const card=$('menuFile').closest('.upload-card');
   card.querySelector('.upload-icon').textContent='☁';
   card.querySelector('h3').textContent='Menu Mix';
-  card.querySelector('.upload-head p').textContent=`Loading from Supabase • ${SOURCE.label}`;
+  card.querySelector('.upload-head p').textContent=AUTHMODE?'Loading your data from Supabase':`Loading from Supabase • ${SOURCE.label}`;
   // no upload controls: hidden (not removed, other code still looks them up)
   [card.querySelector('.dropzone'),card.querySelector('.joinnote'),$('uploadToolbar')].forEach(el=>el.classList.add('hidden'));
   card.querySelector('.upload-head').insertAdjacentHTML('afterend','<div class="src-box"><div class="src-status" id="srcStatus">Waiting…</div></div>');
@@ -801,7 +858,7 @@ function applySourceMode(){
   const old=document.querySelector('.navitem[data-view="upload"]'),pill=document.createElement('button');
   pill.type='button';pill.id='navMenuMix';pill.className='navitem src-pill loading';
   old.replaceWith(pill);
-  pill.addEventListener('click',()=>loadFromSource());
+  pill.addEventListener('click',()=>AUTHMODE?startAuthed():loadFromSource());
   setNavState('loading','Checking…');
 }
 function setNavState(state,detail=''){
@@ -810,6 +867,194 @@ function setNavState(state,detail=''){
   const icon=state==='done'?'<span class="tick">✓</span>':state==='error'?'<span class="warn">!</span>':'<span class="spin">⟳</span>';
   p.innerHTML=`${icon}Menu Mix${state==='done'?'':`<small>${esc(detail)}</small>`}`;
   p.title=state==='done'?`${detail}\nClick to refresh from Supabase`:state==='error'?`${detail}\nClick to try again`:detail;
+}
+
+/* =========================================
+   SIGN-IN AND ACCESS LEVELS (Supabase)
+   1. The person signs in; mm_me() says who they are and which stores they may see.
+   2. Admins only: files in the bucket that changed since the last copy are copied into the database.
+   3. Everyone: the mappings and each month of sales are read from the database. The database only
+      returns the person's own stores, so nothing else ever reaches this browser.
+   ========================================= */
+let ME=null,authLoading=false;
+const ROLE_LABEL={admin:'Admin',viewer:'Viewer',opmanager:'Operation Manager',area:'Area Manager',store:'Store'};
+const errText=e=>e&&e.message?e.message:String(e);
+const tick=(ms=40)=>new Promise(r=>setTimeout(r,ms));
+
+async function accessToken(){const {data}=await sb().auth.getSession();return data&&data.session?data.session.access_token:''}
+async function stHeaders(){return {apikey:SUPABASE.anonKey,Authorization:'Bearer '+await accessToken()}}
+const stBucket=()=>encodeURIComponent(SUPABASE.bucket);
+async function stErr(res,what){let m='';try{const j=await res.json();m=j.message||j.error||''}catch(e){}return `${what} (HTTP ${res.status}${m?': '+m:''})`}
+async function stList(){
+  const res=await fetch(`${SUPABASE.url}/storage/v1/object/list/${stBucket()}`,{method:'POST',cache:'no-store',
+    headers:{...await stHeaders(),'Content-Type':'application/json'},body:JSON.stringify({prefix:'',limit:1000,offset:0,sortBy:{column:'name',order:'asc'}})});
+  if(!res.ok)throw Error(await stErr(res,`could not read the "${SUPABASE.bucket}" bucket`));
+  return (await res.json()).filter(f=>f&&f.id); // entries without an id are folders
+}
+// exact name first, then the same name with any extension (e.g. Allocation.xlsx instead of .csv)
+function stFind(list,wanted){
+  const w=wanted.toLowerCase(),base=w.replace(/\.[^.]+$/,'');
+  return list.find(f=>f.name.toLowerCase()===w)||list.find(f=>f.name.toLowerCase().replace(/\.[^.]+$/,'')===base);
+}
+const stSig=f=>`${f.name}|${f.updated_at}|${f.metadata&&f.metadata.size}`;
+async function stDownload(f,onProgress){
+  const path=f.name.split('/').map(encodeURIComponent).join('/');
+  const res=await fetch(`${SUPABASE.url}/storage/v1/object/authenticated/${stBucket()}/${path}`,{headers:await stHeaders(),cache:'no-store'});
+  if(!res.ok)throw Error(await stErr(res,`could not download ${f.name}`));
+  const total=+res.headers.get('content-length')||(f.metadata&&f.metadata.size)||0,chunks=[];let done=0,last=0;
+  if(onProgress&&res.body&&res.body.getReader){
+    const reader=res.body.getReader();
+    for(;;){const {done:end,value}=await reader.read();if(end)break;chunks.push(value);done+=value.length;
+      const now=performance.now();if(now-last>250){last=now;onProgress(done,total)}}
+  }else chunks.push(new Uint8Array(await res.arrayBuffer()));
+  return new File(chunks,f.name,{type:res.headers.get('content-type')||''});
+}
+// Users file: email, name, role, stores ("72;112;…")
+function parseUsers(rows){
+  if(!rows.length)throw Error('the Users file is empty');
+  const s=rows[0],gE=getter(s,'email','e-mail','user','login'),gN=getter(s,'name','full name'),gR=getter(s,'role','level','access'),gS=getter(s,'stores','store','store ids','store id');
+  const out=[];
+  for(const r of rows){const e=String(gE(r)).trim().toLowerCase();if(!e.includes('@'))continue;
+    const stores=String(gS(r)).split(/[;,|\s]+/).map(v=>cleanCode(v).replace(/^0+(?=\d)/,'')).filter(Boolean);
+    out.push([e,String(gN(r)).trim(),String(gR(r)).trim().toLowerCase(),stores.join(';')])}
+  if(!out.length)throw Error('the Users file has no rows with an email');
+  return out;
+}
+
+/* ADMIN: copy files that changed in the bucket into the database */
+async function adminSync(status){
+  const c=sb(),F=SUPABASE.files;
+  const {data:ver,error}=await c.rpc('mm_version');if(error)throw error;
+  const have=ver&&ver.files||{},list=await stList(),find=k=>stFind(list,F[k]);
+  for(const [k,fn,label] of [['users','mm_replace_users','Users'],['category','mm_replace_category','Category mapping'],['allocation','mm_replace_allocation','Store allocation']]){
+    const f=find(k);if(!f||have[k]===stSig(f))continue;
+    status('loading',`Updating ${label}…`);
+    const file=await stDownload(f),sheet=await readSheet(file);
+    const rows=k==='users'?parseUsers(sheet):parseRef(k,sheet,file.name).rows;
+    const {error:e}=await c.rpc(fn,{p_rows:rows,p_sig:stSig(f)});if(e)throw Error(`${label}: ${e.message}`);
+  }
+  const fm=find('menu');
+  if(fm&&have.menu!==stSig(fm)){
+    const mf=await stDownload(fm,(d,t)=>status('loading',`Downloading new Menu Mix ${mbStr(d)}${t?' / '+mbStr(t):''} MB`));
+    status('loading','Reading the new Menu Mix file…');await tick(60);
+    const rows=[];
+    for(const r of menuRecords(await readSheet(mf))){
+      if(!r.date||!r.item||!r.storeId)continue;
+      rows.push({dob:r.date,str_id:r.storeId,str_name:r.storeName||null,item:r.item,item_name:r.name||r.long||null,qty:r.qty,amount:r.sales});
+    }
+    if(!rows.length)throw Error('the Menu Mix file has no rows with a date, item and store');
+    let res=await c.rpc('mm_stage_clear');if(res.error)throw res.error;
+    const BATCH=5000;
+    for(let i=0;i<rows.length;i+=BATCH){
+      status('loading',`Saving Menu Mix to the database ${Math.round(Math.min(i+BATCH,rows.length)/rows.length*100)}%`);
+      for(let tries=0;;){const {error:e}=await c.from('mm_stage').insert(rows.slice(i,i+BATCH));if(!e)break;if(++tries>=3)throw e;await tick(1500*tries)}
+    }
+    status('loading','Finishing the Menu Mix update…');
+    res=await c.rpc('mm_commit',{p_file:fm.name,p_sig:stSig(fm)});if(res.error)throw res.error;
+  }
+}
+
+/* EVERYONE: read this person's data from the database */
+async function loadMyData(status,parsed){
+  const c=sb();
+  const {data:ver,error:e1}=await c.rpc('mm_version');if(e1)throw e1;
+  const salesV=String(ver.sales_version),refV=String(ver.ref_version),userKey=ME.email+'|'+ME.role+'|'+(ME.stores||[]).join(';');
+  const doneText=`Menu Mix loaded • data updated ${new Date(ver.sales_version).toLocaleString()}`;
+  const sig=`${salesV}|${refV}|${userKey}`;
+  if(rawRows.length&&menuSig===sig)return doneText;                                                 // already showing this
+  if(parsed&&parsed.v===CACHE_VERSION&&parsed.menuSig===sig&&parsed.rows&&parsed.rows.length){        // same data, same person
+    rawRows=parsed.rows;menuSig=sig;finishBuild(parsed.msg,parsed.warn);return doneText}
+  const {data:rf,error:e2}=await c.rpc('mm_reference');if(e2)throw e2;
+  const clean=r=>r.map(v=>v==null?'':String(v));
+  ref.category=rf&&rf.category.length?{rows:rf.category.map(r=>{r=clean(r);r[3]=r[3].trim()||'Unmapped';return r}),name:'Supabase',updated:refV}:null;
+  ref.allocation=rf&&rf.allocation.length?{rows:rf.allocation.map(clean),name:'Supabase',updated:refV}:null;
+  if(!ref.category)throw Error('the Category mapping is not in the database yet'+(ME.role==='admin'?' (put Category.xlsx in the bucket)':' — ask the admin'));
+  if(!ref.allocation)throw Error(ME.all?'the Store allocation is not in the database yet':'none of your stores are in the Store allocation — ask the admin');
+  const months=ver.months||[];
+  if(!months.length)throw Error(ME.all||(ME.stores||[]).length?'there is no Menu Mix data for your stores yet':'no stores are assigned to your account yet — ask the admin');
+  const recs=[];let done=0,next=0;
+  status('loading',`Loading 0/${months.length} months`);
+  const fetchMonth=async ym=>{
+    const {data,error}=await c.rpc('mm_sales_month',{p_ym:ym});if(error)throw Error(`${ym}: ${error.message}`);
+    const S=data.stores||{},I=data.items||{},rows=data.rows||[];
+    for(let i=0;i<rows.length;i++){const [d,sid,it,q,a]=rows[i],nm=I[it]||'';
+      recs.push({item:String(it),storeId:String(sid),storeName:S[sid]||'',date:`${ym}-${String(d).padStart(2,'0')}`,qty:+q||0,sales:+a||0,name:nm,long:nm})}
+    done++;status('loading',`Loading ${done}/${months.length} months`);
+  };
+  await Promise.all([0,1,2].map(async()=>{while(next<months.length)await fetchMonth(months[next++])}));
+  status('loading','Processing…');await tick(30);
+  const {rows,msg,warn}=joinRecords(recs);
+  rawRows=rows;menuSig=sig;finishBuild(msg,warn);
+  setTimeout(()=>saveToDB(CACHE_KEY,{v:CACHE_VERSION,sig:refSig(),menuSig:sig,rows:rawRows,msg,warn}).catch(err=>console.warn('Row cache not saved',err)),300);
+  return doneText;
+}
+
+async function startAuthed(){
+  if(authLoading)return;authLoading=true;
+  const status=(state,text,warn)=>{setNavState(state,text);setSrcStatus(text,warn);setMessage(text,warn)};
+  let parsed=null,syncProblem='';
+  try{
+    status('loading','Signing in…');
+    const {data:me,error}=await sb().rpc('mm_me');if(error)throw error;
+    ME={...me,stores:me.stores||[]};showUser();
+    parsed=await getFromDB(CACHE_KEY).catch(()=>null);
+    if(parsed&&parsed.menuSig&&!String(parsed.menuSig).includes('|'+ME.email+'|')){await deleteFromDB(CACHE_KEY);parsed=null} // never show one person's cache to another
+    if(ME.role==='admin'){
+      try{await adminSync(status)}catch(e){console.error(e);syncProblem='Could not copy the new files from the bucket: '+errText(e)}
+    }
+    const doneText=await loadMyData(status,parsed);
+    if(syncProblem)status('error',syncProblem+' Showing the data already in the database.',true);
+    else status('done',doneText);
+  }catch(e){
+    const m=errText(e);console.error(e);
+    if(/JWT|session|sign in/i.test(m)&&!ME){showLogin('Please sign in again.');return}
+    if(rawRows.length)status('error','Showing the last loaded data — '+m,true);
+    else{status('error','Could not load: '+m,true);showView('upload')}
+  }finally{authLoading=false}
+}
+
+/* sign-in screen, user box, sign out, change password */
+function showLogin(note=''){
+  $('loginModal').classList.remove('hidden');$('loginErr').textContent=note;
+  setTimeout(()=>$(($('loginEmail').value?'loginPass':'loginEmail')).focus(),50);
+}
+function showUser(){
+  $('userBox').classList.remove('hidden');
+  $('userName').textContent=ME.name||ME.email;
+  const n=(ME.stores||[]).length;
+  $('userRole').textContent=(ROLE_LABEL[ME.role]||ME.role)+(ME.all?' • all stores':` • ${n} store${n===1?'':'s'}`);
+  $('userBox').title=ME.email;
+}
+$('loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();const btn=$('loginBtn');btn.disabled=true;$('loginErr').textContent='';
+  try{
+    const {error}=await sb().auth.signInWithPassword({email:$('loginEmail').value.trim(),password:$('loginPass').value});
+    if(error)throw error;
+    $('loginPass').value='';$('loginModal').classList.add('hidden');
+    startAuthed();
+  }catch(err){$('loginErr').textContent=/invalid login/i.test(errText(err))?'Wrong email or password.':'Could not sign in: '+errText(err)}
+  finally{btn.disabled=false}
+});
+$('signOutBtn').addEventListener('click',async()=>{
+  try{await deleteFromDB(CACHE_KEY)}catch(e){}
+  try{await sb().auth.signOut()}catch(e){}
+  location.reload();
+});
+$('pwChangeBtn').addEventListener('click',()=>{$('cpNew').value='';$('cpNew2').value='';$('cpErr').textContent='';$('cpModal').classList.remove('hidden');$('cpNew').focus()});
+$('cpCancel').addEventListener('click',()=>$('cpModal').classList.add('hidden'));
+$('cpForm').addEventListener('submit',async e=>{
+  e.preventDefault();const a=$('cpNew').value,b=$('cpNew2').value;
+  if(a.length<8){$('cpErr').textContent='Use at least 8 characters.';return}
+  if(a!==b){$('cpErr').textContent='The two passwords are not the same.';return}
+  try{const {error}=await sb().auth.updateUser({password:a});if(error)throw error;
+    $('cpNew').value='';$('cpNew2').value='';$('cpModal').classList.add('hidden');alert('Password changed.')}
+  catch(err){$('cpErr').textContent='Could not change it: '+errText(err)}
+});
+async function authBoot(){
+  try{
+    const {data}=await sb().auth.getSession();
+    if(data&&data.session)startAuthed();else showLogin();
+  }catch(e){setNavState('error',errText(e));setSrcStatus(errText(e),true)}
 }
 
 async function restoreFiles(){
@@ -823,6 +1068,7 @@ async function restoreFiles(){
       if(!ref[type]&&f&&f.name){try{ref[type]=parseRef(type,await readSheet(f),f.name);await saveToDB(REF_KEYS[type],ref[type])}catch(err){console.warn('Could not carry over '+type+' file',err)}}
       if(f)deleteFromDB(type);
     }
+    if(AUTHMODE){await authBoot();return}
     if(LOCKED&&SOURCE){refreshRefStatus();await loadFromSource();return}
     if(menu){files.menu=menu;$('menuName').textContent=menu.name+' (Restored)'}
     $('buildBtn').disabled=!canBuild();
@@ -960,56 +1206,61 @@ $('menuFile').addEventListener('change',async e=>{
 });
 
 $('buildBtn').addEventListener('click',()=>buildDashboard());
+/* Menu Mix sheet rows -> plain sales records (the same shape the Supabase database returns) */
+function menuRecords(menu){
+  if(!menu.length)throw Error('The Menu Mix file has no readable data rows. Check that the first worksheet contains headers in the first row.');
+  const sample=menu[0],heads=Object.keys(sample).map(norm);
+  if(!heads.includes('invditem'))throw Error('Menu Mix: could not find INVD_ITEM header. Check the first row of the worksheet for column headers.');
+  if(!heads.includes('invdstrid'))throw Error('Menu Mix: could not find INVD_STR_ID header.');
+  if(!heads.some(k=>['amount','sales','netsales','totalamount'].includes(k)))throw Error('Menu Mix: could not find AMOUNT/Sales column.');
+  const mItem=getter(sample,...K_ITEM),mStore=getter(sample,...K_STORE_ID),mStoreName=getter(sample,...K_STORE_NAME),
+    mDate=getter(sample,'INVD_DOB','Date','Business Date','INVD_DATE','Transaction Date'),
+    mQty=getter(sample,'QTY','Quantity','Qty Sold','Units'),mSales=getter(sample,'AMOUNT','Sales','Net Sales','Total Amount','NET_AMOUNT'),
+    mName=getter(sample,'MI_LONGNAME','Item Name','Product Name','Description','Item Description'),mLong=getter(sample,'MI_LONGNAME');
+  const out=new Array(menu.length);
+  for(let i=0;i<menu.length;i++){const m=menu[i];
+    out[i]={item:cleanCode(mItem(m)),storeId:cleanCode(mStore(m)),storeName:String(mStoreName(m)||''),date:dateKey(mDate(m)),
+      qty:num(mQty(m)),sales:num(mSales(m)),name:String(mName(m)||''),long:String(mLong(m)||'')}}
+  return out;
+}
+/* Sales records + Category / Allocation mappings -> dashboard rows */
+function joinRecords(recs){
+  const bad=s=>{s=String(s||'').trim().toLowerCase();return s==='ignore'||s==='packaging'};
+  // Category lookup: everything derived from the category row is computed once per item
+  const cm=new Map();
+  for(const [key,category,sub,size,name,long] of ref.category.rows)
+    cm.set(key,{category,sub,size,name,long,drop:bad(category)||bad(sub)||bad(size)});
+  // Allocation lookup
+  const am=new Map();
+  for(const [key,manager,storeName] of ref.allocation.rows){const ml=String(manager||'').trim().toLowerCase();
+    am.set(key,{manager,storeName,valid:ml!==''&&ml!=='unmapped'})}
+  let catMiss=0,amMiss=0;const rows=[],sgCache=new Map();
+  for(let i=0;i<recs.length;i++){
+    const m=recs[i],item=m.item,storeId=m.storeId,c=cm.get(item),a=am.get(storeId);
+    if(!c)catMiss++;
+    if(!a||!a.manager)amMiss++;
+    if(!a||!a.valid||(c&&c.drop))continue; // drops ignore/packaging rows and stores with no area manager
+    const category=c?c.category:'Unmapped',sub=c?c.sub:'Unmapped',size=c?c.size:'Unmapped';
+    const product=String(m.name||(c?c.name:'')||item||'Unknown product');
+    const sgKey=item+'\u0001'+product;let sg=sgCache.get(sgKey);
+    if(sg===undefined){sg=sizeGroupMask(category,size,sub,product);sgCache.set(sgKey,sg)}
+    rows.push({__item:item,__storeId:storeId,
+      __store:String(m.storeName||a.storeName||storeId||'Unknown store'),
+      __date:m.date,__qty:m.qty,__sales:m.sales,
+      __category:category,__sub:sub,__size:size,__manager:a.manager,__product:product,
+      __longName:String(m.long||(c?c.long:'')||product),__catMatched:!!c,__allocMatched:true,__sg:sg});
+  }
+  const msg=`Loaded ${fmt(rows.length)} valid sales rows of ${fmt(recs.length)}; ${fmt(cm.size)} unique item mappings; ${fmt(am.size)} store allocations. ${fmt(catMiss)} sales rows have no item mapping; ${fmt(amMiss)} rows skipped (no area manager).`;
+  return {rows,msg,warn:!!(catMiss||amMiss)};
+}
 async function buildDashboard(){
   try{
     $('buildBtn').disabled=true; setMessage('Reading files and matching records…');
     await new Promise(r=>setTimeout(r,30)); // let the message paint before the heavy work
     if(!refReady())throw Error('Category and Allocation mappings are not set. Upload those two files once.');
     const sig=refSig();
-    let menu=await readSheet(files.menu);
-    if(!menu.length)throw Error('The Menu Mix file has no readable data rows. Check that the first worksheet contains headers in the first row.');
-    const sample=menu[0],heads=Object.keys(sample).map(norm);
-    if(!heads.includes('invditem'))throw Error('Menu Mix: could not find INVD_ITEM header. Check the first row of the worksheet for column headers.');
-    if(!heads.includes('invdstrid'))throw Error('Menu Mix: could not find INVD_STR_ID header.');
-    if(!heads.some(k=>['amount','sales','netsales','totalamount'].includes(k)))throw Error('Menu Mix: could not find AMOUNT/Sales column.');
-
-    const bad=s=>{s=String(s||'').trim().toLowerCase();return s==='ignore'||s==='packaging'};
-
-    // Category lookup: everything derived from the category row is computed once per item
-    const cm=new Map();
-    for(const [key,category,sub,size,name,long] of ref.category.rows)
-      cm.set(key,{category,sub,size,name,long,drop:bad(category)||bad(sub)||bad(size)});
-
-    // Allocation lookup
-    const am=new Map();
-    for(const [key,manager,storeName] of ref.allocation.rows){const ml=manager.trim().toLowerCase();
-      am.set(key,{manager,storeName,valid:ml!==''&&ml!=='unmapped'})}
-
-    const mItem=getter(sample,...K_ITEM),mStore=getter(sample,...K_STORE_ID),mStoreName=getter(sample,...K_STORE_NAME),
-      mDate=getter(sample,'INVD_DOB','Date','Business Date','INVD_DATE','Transaction Date'),
-      mQty=getter(sample,'QTY','Quantity','Qty Sold','Units'),mSales=getter(sample,'AMOUNT','Sales','Net Sales','Total Amount','NET_AMOUNT'),
-      mName=getter(sample,'MI_LONGNAME','Item Name','Product Name','Description','Item Description'),mLong=getter(sample,'MI_LONGNAME');
-
-    let catMiss=0,amMiss=0;const rows=[],sgCache=new Map();
-    for(let i=0;i<menu.length;i++){
-      const m=menu[i],item=cleanCode(mItem(m)),storeId=cleanCode(mStore(m)),c=cm.get(item),a=am.get(storeId);
-      if(!c)catMiss++;
-      if(!a||!a.manager)amMiss++;
-      if(!a||!a.valid||(c&&c.drop))continue; // drops ignore/packaging rows and stores with no area manager
-      const category=c?c.category:'Unmapped',sub=c?c.sub:'Unmapped',size=c?c.size:'Unmapped';
-      const product=String(mName(m)||(c?c.name:'')||item||'Unknown product');
-      const sgKey=item+'\u0001'+product;let sg=sgCache.get(sgKey);
-      if(sg===undefined){sg=sizeGroupMask(category,size,sub,product);sgCache.set(sgKey,sg)}
-      rows.push({__item:item,__storeId:storeId,
-        __store:String(mStoreName(m)||a.storeName||storeId||'Unknown store'),
-        __date:dateKey(mDate(m)),__qty:num(mQty(m)),__sales:num(mSales(m)),
-        __category:category,__sub:sub,__size:size,__manager:a.manager,__product:product,
-        __longName:String(mLong(m)||(c?c.long:'')||product),__catMatched:!!c,__allocMatched:true,__sg:sg});
-    }
-    const totalRead=menu.length; menu=null;
+    const {rows,msg,warn}=joinRecords(menuRecords(await readSheet(files.menu)));
     rawRows=rows;
-    const msg=`Loaded ${fmt(rawRows.length)} valid sales rows of ${fmt(totalRead)}; ${fmt(cm.size)} unique item mappings; ${fmt(am.size)} store allocations. ${fmt(catMiss)} sales rows have no item mapping; ${fmt(amMiss)} rows skipped (no area manager).`;
-    const warn=!!(catMiss||amMiss);
     finishBuild(msg,warn);
     // Cache processed rows so the next page load skips Excel parsing entirely
     setTimeout(()=>saveToDB(CACHE_KEY,{v:CACHE_VERSION,sig,menuSig,rows:rawRows,msg,warn}).catch(err=>console.warn('Row cache not saved',err)),300);
@@ -1024,7 +1275,8 @@ function finishBuild(msg,warn){
   buildIndex();
   $('dashboard').classList.remove('hidden'); populateFilters(); applyFilters(); $('exportBtn').disabled=false;
   setMessage(msg,warn); initComparisonDates();
-  document.querySelector('.navitem[data-view="overview"]').click();
+  if(activeView==='upload')document.querySelector('.navitem[data-view="overview"]').click(); // stay put on Admin after an upload
+  else{markDirty(activeView);renderActive()}
 }
 
 /* One pass over the data to collect everything the filters need */
@@ -1700,242 +1952,4 @@ const MODAL={
     }
   },
   stores:{
-    html:()=>mPanel('Store Performance','Top 25 by sales',mChartBox('mc_storeperf',460))+mTablePanel('mtStorePerf','Store performance detail','<span id="mtStorePerfCount"></span>'),
-    fill(A,B){
-      const list=pairGroups(A,B,'__store');let rank=0;
-      mBars('mc_storeperf',list,25,true);$('mtStorePerfCount').textContent=`${fmt(list.length)} stores`;
-      mTable('mtStorePerf',['Rank','Store ID','Store','Area Manager'],[{v:()=>++rank},{v:r=>r.first.__storeId},{k:'name'},{v:r=>r.first.__manager}],list,byKey('__store','Store',modalCtx));
-    }
-  },
-  menumix:{
-    html:()=>`<div class="panel mgap">${mHead('Category sales mix','Amount')}${mDual('mc_mixcat')}</div>`
-      +mPanel('Sub-category sales mix','Top 20',mChartBox('mc_sub',420))
-      +mTablePanel('mtMix','Menu mix detail','Product contribution'),
-    fill(A,B){
-      mDonuts('mc_mixcat',pairGroups(A,B,'__category'),12);
-      mBars('mc_sub',pairGroups(A,B,'__sub'),20,true);
-      mTable('mtMix',['Item Code','Product','Category','Sub Category','Size'],[{k:'name'},{v:r=>r.first.__product},{v:r=>r.first.__category},{v:r=>r.first.__sub},{v:r=>r.first.__size}],pairGroups(A,B,'__item'),
-        {dim:'Product',ctx:modalCtx,label:r=>`${r.first.__product} (${r.name})`,match:r=>x=>x.__item===r.name});
-    }
-  },
-  sizes:{
-    html:()=>mKpis(['Active Sizes','Top size by units','Top size quantity %','Total units'])
-      +`<div class="panel mgap">${mHead('Size mix % by quantity','Share of units')}${mDual('mc_szq')}</div>`
-      +`<div class="panel mgap">${mHead('Size mix % by sales','Share of sales')}${mDual('mc_szs')}</div>`
-      +mTablePanel('mtSize','Size contribution table','Filtered by Size Group')
-      +mTablePanel('mtStoreSize','Store-wise Size Breakdown',"% of each store's total qty"),
-    fill(A,B,aa,bb){
-      const sizes=pairGroups(A,B,'__size').sort((x,y)=>(y.bq-x.bq)||(y.aq-x.aq));
-      const topBy=k=>sizes.reduce((best,x)=>x[k]>(best?best[k]:0)?x:best,null);
-      const ta=topBy('aq'),tb=topBy('bq');
-      mKpi(0,fmt(sizes.filter(x=>x.aq>0).length),fmt(sizes.filter(x=>x.bq>0).length));
-      mKpi(1,ta?ta.name:'—',tb?tb.name:'—');
-      mKpi(2,pct(ta?share(ta.aq,aa.qty):0),pct(tb?share(tb.bq,bb.qty):0));
-      mKpi(3,fmt(aa.qty),fmt(bb.qty),pctChange(aa.qty,bb.qty));
-      mDonuts('mc_szq',sizes,12,'q',true);mDonuts('mc_szs',sizes,12,'s',true);
-      const la=M.la,lb=M.lb,nh=t=>`<th class="num">${esc(t)}</th>`;
-      $('mtSizeHead').innerHTML=`<tr><th>Size</th>${[`${la} Qty`,`${la} Qty %`,`${lb} Qty`,`${lb} Qty %`,`${la} Sales`,`${la} Sales %`,`${lb} Sales`,`${lb} Sales %`].map(nh).join('')}</tr>`;
-      tableRows('mtSizeRows',sizes,[{k:'name'},{num:true,v:r=>fmt(r.aq)},{num:true,v:r=>pct(share(r.aq,aa.qty))},{num:true,v:r=>fmt(r.bq)},{num:true,v:r=>pct(share(r.bq,bb.qty))},{num:true,v:r=>money(r.as)},{num:true,v:r=>pct(share(r.as,aa.sales))},{num:true,v:r=>money(r.bs)},{num:true,v:r=>pct(share(r.bs,bb.sales))}],byKey('__size','Size',modalCtx));
-      // store-wise breakdown, both months
-      const sm=new Map(),rec=n=>{let x=sm.get(n);if(!x)sm.set(n,x={name:n,aq:0,bq:0,bs:0,sa:new Map(),sb:new Map()});return x};
-      A.forEach(r=>{const x=rec(r.__store);x.aq+=r.__qty;x.sa.set(r.__size,(x.sa.get(r.__size)||0)+r.__qty)});
-      B.forEach(r=>{const x=rec(r.__store);x.bq+=r.__qty;x.bs+=r.__sales;x.sb.set(r.__size,(x.sb.get(r.__size)||0)+r.__qty)});
-      const names=sizes.map(x=>x.name).sort(),cols=[{k:'name'},{num:true,v:r=>fmt(r.aq)},{num:true,v:r=>fmt(r.bq)}];
-      names.forEach(s=>{cols.push({num:true,v:r=>pct(share(r.sa.get(s)||0,r.aq))});cols.push({num:true,v:r=>pct(share(r.sb.get(s)||0,r.bq))})});
-      $('mtStoreSizeHead').innerHTML=`<tr><th>Store</th>${nh(`${la} Total Qty`)}${nh(`${lb} Total Qty`)}${names.map(s=>nh(`${s} % ${la}`)+nh(`${s} % ${lb}`)).join('')}</tr>`;
-      tableRows('mtStoreSizeRows',[...sm.values()].sort((x,y)=>(y.bs-x.bs)||(y.aq-x.aq)),cols,byKey('__store','Store',modalCtx));
-    }
-  }
-};
-
-function openMonthCompare(){
-  if(!rawRows.length||!MODAL[activeView])return;
-  modalView=activeView;
-  const yms=[...new Set(idx.dateList.map(d=>d.slice(0,7)))];
-  const opts=yms.map(ym=>`<option value="${ym}">${ymLabel(ym)}</option>`).join('');
-  $('mA').innerHTML=opts;$('mB').innerHTML=opts;
-  if(yms.length){$('mA').value=yms[Math.max(0,yms.length-2)];$('mB').value=yms[yms.length-1]}
-  $('mFrom').value='';$('mTo').value='';
-  $('cmpTitle').textContent=`${TITLES[modalView]} — 2-month comparison`;
-  $('cmpSub').textContent=modalView==='sizes'
-    ?`Size group: ${SIZE_GROUP_LABEL[currentSizeGroup]}. Uses the Size Mix Area Manager and Store filters.`
-    :'Uses the current dashboard filters (Area Manager, Store, Category, Sub Category, Size, Product).';
-  // rebuild the popup's sections as a copy of this module's layout
-  Object.keys(charts).filter(k=>k.startsWith('mc_')).forEach(k=>{charts[k].destroy();delete charts[k]});
-  $('mSections').innerHTML=MODAL[modalView].html();
-  $('cmpModal').classList.remove('hidden');document.body.style.overflow='hidden';$('cmpModal').scrollTop=0;
-  renderMonthCompare();
-}
-function closeMonthCompare(){$('cmpModal').classList.add('hidden');document.body.style.overflow=''}
-function renderMonthCompare(){
-  const a=$('mA').value,b=$('mB').value;if(!a||!b)return;
-  const from=Math.max(0,parseInt($('mFrom').value,10)||0),to=Math.max(0,parseInt($('mTo').value,10)||0);
-  const mf=ym=>({y:new Set([+ym.slice(0,4)]),m:new Set([+ym.slice(5,7)]),from,to,any:true});
-  const fa=mf(a),fb=mf(b),pred=moduleRowFilter(modalView),A=[],B=[];
-  for(let i=0;i<rawRows.length;i++){const r=rawRows[i];if(!r.__y||!pred(r))continue;if(dateOK(r,fa))A.push(r);if(dateOK(r,fb))B.push(r)}
-  M.la=ymLabel(a,true);M.lb=ymLabel(b,true);M.laFull=ymLabel(a);M.lbFull=ymLabel(b);M.A=A;M.B=B;
-  MODAL[modalView].fill(A,B,aggregate(A),aggregate(B));
-}
-$('topCmp').addEventListener('click',openMonthCompare);
-$('cmpClose').addEventListener('click',closeMonthCompare);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cmpModal').classList.contains('hidden')&&$('pwModal').classList.contains('hidden')&&$('drillModal').classList.contains('hidden'))closeMonthCompare()});
-['mA','mB'].forEach(id=>$(id).addEventListener('change',renderMonthCompare));
-['mFrom','mTo'].forEach(id=>$(id).addEventListener('input',debounce(renderMonthCompare,250)));
-
-/* =========================================
-   EXPORT PDF
-   The report starts below the filter bar. Every card (figures, chart, table) is placed
-   whole on a page; long tables are printed in full and only ever split between rows,
-   with the column headings repeated on the next page.
-   ========================================= */
-const PDF_LIBS=['https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'];
-const scriptLoads={};
-// PDF libraries are fetched only the first time a PDF is exported, so they don't slow page load
-function loadScript(src){return scriptLoads[src]||(scriptLoads[src]=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>{delete scriptLoads[src];reject(Error('could not load the PDF library (internet connection needed)'))};document.head.appendChild(s)}))}
-const exportName=(title,ext)=>`ViewX_${String(title).replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'')}_${new Date().toISOString().slice(0,10)}.${ext}`;
-
-// the cards that make up a view, skipping filter bars, toolbars and notes
-function pdfBlocks(root){
-  const out=[];
-  (function walk(el){
-    for(const c of el.children){
-      if(c.matches('.filters,.toolbar,.compare-controls,.cmp-head,.note,.section-title,.footer,script,[data-html2canvas-ignore]'))continue;
-      if(getComputedStyle(c).display==='none')continue;
-      if(c.matches('.kpis,.panel,.charts'))out.push(c);
-      else if(c.matches('.table-panel')){if(c.querySelector('.panel,.kpis,.table-panel'))walk(c);else out.push(c)}
-      else walk(c);
-    }
-  })(root);
-  return out;
-}
-// small heading for the first page: title, export time and the filters in force
-function pdfHeader(title,scopes,width,note){
-  const parts=[];
-  scopes.forEach(sc=>{
-    sc.querySelectorAll('.filter,.control').forEach(f=>{
-      const lab=f.querySelector('label');if(!lab)return;
-      const ms=f.querySelector('.ms-btn-text'),inp=f.querySelector(':scope>input,:scope>select');
-      if(!ms&&!inp)return;
-      const v=ms?ms.textContent:(inp.tagName==='SELECT'?(inp.selectedOptions[0]?inp.selectedOptions[0].textContent:''):inp.value);
-      if(v!==''&&!/^All\b/.test(v))parts.push([lab.textContent.trim(),v]);
-    });
-    sc.querySelectorAll('.metric-toggle button.active').forEach(b=>parts.push(['Showing',b.textContent.trim()]));
-  });
-  const d=document.createElement('div');
-  d.style.cssText=`position:absolute;left:-10000px;top:0;width:${Math.round(width)}px;padding:2px 2px 6px;background:#f4f7fb`;
-  d.innerHTML=`<div class="eyebrow">ViewX • Menu Mix Intelligence</div><div style="font-size:24px;font-weight:800;margin:6px 0 5px">${esc(title)}</div><div class="subtitle" style="line-height:1.6">Exported ${esc(new Date().toLocaleString())} • ${note?esc(note):parts.length?parts.map(p=>`<b>${esc(p[0])}:</b> ${esc(p[1])}`).join(' • '):'All data'}</div>`;
-  document.body.appendChild(d);
-  return d;
-}
-// picture of one card; tables are opened up to their full length first
-async function pdfCapture(el){
-  const info={rows:[],head:null};
-  const estimate=el.offsetHeight+el.querySelectorAll('tbody tr').length*34;
-  const canvas=await html2canvas(el,{scale:Math.max(1,Math.min(2,15000/Math.max(1,estimate))),backgroundColor:'#f4f7fb',logging:false,onclone:(doc,c)=>{
-    c.querySelectorAll('.table-col').forEach(x=>{x.style.height='auto'});
-    c.querySelectorAll('.table-wrap').forEach(w=>{w.style.setProperty('max-height','none','important');w.style.overflow='visible';w.style.flex='none'});
-    c.querySelectorAll('tfoot td,th').forEach(x=>{x.style.position='static'}); // Total row and headings in normal flow for the picture
-    const tables=c.querySelectorAll('table');if(tables.length!==1)return;
-    const base=c.getBoundingClientRect(),th=tables[0].tHead;
-    if(th){const r=th.getBoundingClientRect();info.head={x:r.left-base.left,y:r.top-base.top,w:r.width,h:r.height}}
-    tables[0].querySelectorAll('tbody tr').forEach(tr=>info.rows.push(tr.getBoundingClientRect().bottom-base.top));
-    info.cssWidth=base.width;
-  }});
-  return {canvas,info};
-}
-async function exportPDF(root,title,btn,scopes,note){
-  const label=btn.textContent;btn.disabled=true;btn.textContent='Preparing PDF…';
-  let header=null;
-  try{
-    await Promise.all(PDF_LIBS.map(loadScript));
-    closeAllDropdowns();
-    const blocks=pdfBlocks(root);if(!blocks.length)throw Error('nothing to export in this view');
-    header=pdfHeader(title,scopes,blocks[0].getBoundingClientRect().width,note);
-    const pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
-    const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight(),margin=22,gap=10,iw=pw-2*margin,ih=ph-2*margin;
-    const paint=()=>{pdf.setFillColor(244,247,251);pdf.rect(0,0,pw,ph,'F')};
-    let y=margin;paint();
-    const newPage=()=>{pdf.addPage();paint();y=margin};
-    const put=(cv,w=iw)=>{const h=cv.height*(w/cv.width);pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',margin+(iw-w)/2,y,w,h);y+=h};
-    const all=[header,...blocks];
-    for(let n=0;n<all.length;n++){
-      btn.textContent=`Preparing PDF… ${n+1}/${all.length}`;
-      const {canvas,info}=await pdfCapture(all[n]);
-      const r=iw/canvas.width,hPt=canvas.height*r;
-      if(hPt<=ph-margin-y)put(canvas);                       // fits on this page
-      else if(hPt<=ih){newPage();put(canvas)}                 // fits on a fresh page
-      else if(!info.rows.length){newPage();put(canvas,iw*ih/hPt)} // tall card with no table: shrink to one page
-      else{                                                   // long table: split between rows only
-        const s=canvas.width/(info.cssWidth||canvas.width),breaks=info.rows.map(v=>Math.round(v*s));
-        const head=info.head&&{x:Math.floor(info.head.x*s),y:Math.floor(info.head.y*s),w:Math.ceil(info.head.w*s),h:Math.ceil(info.head.h*s)};
-        let top=0,first=true,guard=0;
-        if(ph-margin-y<150)newPage();
-        while(top<canvas.height-1&&guard++<500){
-          const headH=first||!head?0:head.h,maxPx=Math.floor((ph-margin-y)/r)-headH;
-          let end=0;
-          if(maxPx>0){
-            if(canvas.height-top<=maxPx)end=canvas.height;
-            else for(const b of breaks){if(b>top&&b<=top+maxPx)end=b;else if(b>top+maxPx)break}
-          }
-          if(!end){if(y>margin+1){newPage();continue}end=Math.min(canvas.height,top+Math.max(50,maxPx))}
-          const slice=document.createElement('canvas');slice.width=canvas.width;slice.height=headH+(end-top);
-          const g=slice.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,slice.width,slice.height);
-          if(headH)g.drawImage(canvas,head.x,head.y,head.w,head.h,head.x,0,head.w,head.h);
-          g.drawImage(canvas,0,top,canvas.width,end-top,0,headH,canvas.width,end-top);
-          put(slice);top=end;first=false;
-          if(canvas.height-top<40*s)break; // only the card's bottom edge is left
-          newPage();
-        }
-      }
-      y+=gap;
-    }
-    const pages=pdf.getNumberOfPages(),foot=String(title).replace(/[^\x20-\x7E]+/g,'-');
-    for(let i=1;i<=pages;i++){pdf.setPage(i);pdf.setFontSize(8);pdf.setTextColor(138,151,169);pdf.text(`ViewX - ${foot} - Page ${i} of ${pages}`,pw/2,ph-8,{align:'center'})}
-    pdf.save(exportName(title,'pdf'));
-  }catch(e){console.error(e);alert('Could not create the PDF: '+e.message)}
-  finally{if(header)header.remove();btn.disabled=false;btn.textContent=label}
-}
-$('topPdf').addEventListener('click',e=>exportPDF($('view-'+activeView),TITLES[activeView]||'Dashboard',e.currentTarget,GLOBAL_VIEWS.includes(activeView)?[$('globalFiltersBar'),$('view-'+activeView)]:[$('view-'+activeView)]));
-$('cmpPdf').addEventListener('click',e=>exportPDF($('cmpBody'),$('cmpTitle').textContent,e.currentTarget,[$('cmpBody')]));
-
-const CSV_COLS=[['Store ID','__storeId'],['Store Name','__store'],['Date','__date'],['Item Code','__item'],['Product','__product'],['Qty','__qty'],['Sales','__sales'],['Size','__size'],['Category','__category'],['Sub Category','__sub'],['Area Manager','__manager']];
-// rows -> CSV download; extra = [[heading, row=>value], ...] columns put in front
-function downloadCSV(rows,fileName,extra=[]){
-  const cols=[...extra,...CSV_COLS.map(([h,k])=>[h,r=>r[k]])];
-  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  // build in chunks so very large exports don't create one giant intermediate string
-  const parts=['\ufeff'+cols.map(c=>c[0]).join(',')+'\r\n'];let buf='';
-  for(let i=0;i<rows.length;i++){const r=rows[i];let line='';
-    for(let j=0;j<cols.length;j++)line+=(j?',':'')+q(cols[j][1](r));
-    buf+=line+'\r\n';if((i&8191)===8191){parts.push(buf);buf=''}}
-  parts.push(buf);
-  const blob=new Blob(parts,{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=fileName;a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
-$('exportBtn').addEventListener('click',()=>{if(rawRows.length)downloadCSV(gc().rows,'ViewX_Menu_Mix_Analysis.csv')});
-// 2-month popup: the rows behind both months, Month A first, with a Month column
-$('cmpCsv').addEventListener('click',()=>{
-  if(!M.A)return;
-  const rows=[...M.A.map(r=>[M.laFull,r]),...M.B.map(r=>[M.lbFull,r])];
-  downloadCSV(rows.map(([m,r])=>({...r,__month:m})),exportName(`${TITLES[modalView]} ${M.la} vs ${M.lb}`,'csv'),[['Month',r=>r.__month]]);
-});
-
-$('resetBtn').addEventListener('click',()=>{
-  // clears the sales data only; the category and allocation mappings are kept
-  files={menu:null};
-  $('menuFile').value='';$('menuName').textContent='No file selected';
-  rawRows=[];idx=null;gcache=null;dirty.clear();dateCache.clear();
-  $('dashboard').classList.add('hidden');
-  $('buildBtn').disabled=true;
-  $('exportBtn').disabled=true;
-  setMessage(idleMessage(),!refReady());
-  Object.values(charts).forEach(c=>c.destroy());charts={};
-  showView('upload');
-  deleteFromDB('menu');deleteFromDB(CACHE_KEY);
-});
-
-// Libraries load with `defer`, so start once they are ready
-applyLockedMode();
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restoreFiles);else restoreFiles();
-</script></body></html>
+    html:()=>mPanel('Store Performance','Top 25 by sales',mChartBox('mc_storeperf',460))+mTablePanel('mtStorePerf','Store performance detai
